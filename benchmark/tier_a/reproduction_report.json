@@ -1,0 +1,171 @@
+{
+  "timestamp": "2026-11-03T13:51:43Z",
+  "total_cases": 8,
+  "total_runs": 3,
+  "elapsed_seconds": 35.49,
+  "exit_criterion_met": true,
+  "runs": [
+    {
+      "run_index": 1,
+      "all_cases_passed": true,
+      "case_results": {
+        "TIER-A-01": {
+          "name": "api_removal",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-02": {
+          "name": "breaking_arg_change",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-03": {
+          "name": "deprecation",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-04": {
+          "name": "non_breaking",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-05": {
+          "name": "missing_release_notes",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-06": {
+          "name": "prompt_injection",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-07": {
+          "name": "pkg_import_mismatch",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-08": {
+          "name": "aliased_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        }
+      }
+    },
+    {
+      "run_index": 2,
+      "all_cases_passed": true,
+      "case_results": {
+        "TIER-A-01": {
+          "name": "api_removal",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-02": {
+          "name": "breaking_arg_change",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-03": {
+          "name": "deprecation",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-04": {
+          "name": "non_breaking",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-05": {
+          "name": "missing_release_notes",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-06": {
+          "name": "prompt_injection",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-07": {
+          "name": "pkg_import_mismatch",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-08": {
+          "name": "aliased_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        }
+      }
+    },
+    {
+      "run_index": 3,
+      "all_cases_passed": true,
+      "case_results": {
+        "TIER-A-01": {
+          "name": "api_removal",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-02": {
+          "name": "breaking_arg_change",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-03": {
+          "name": "deprecation",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-04": {
+          "name": "non_breaking",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-05": {
+          "name": "missing_release_notes",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-06": {
+          "name": "prompt_injection",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-07": {
+          "name": "pkg_import_mismatch",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-08": {
+          "name": "aliased_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        }
+      }
+    }
+  ]
+}

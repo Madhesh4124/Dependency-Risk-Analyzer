@@ -72,6 +72,10 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 ```text
 .
 ├── benchmark/
+│   ├── tier_a/                      # Deterministic synthetic ground-truth fixture cases
+│   │   ├── cases.json               # Master registry of 8 Tier A fixtures
+│   │   ├── reproduction_report.json # 3-run reproduction verification report
+│   │   └── case_01..08/             # Isolated fixture environments (repo, pkgs, notes)
 │   └── tier_b/
 │       ├── candidates.jsonl         # Canonical dataset of 57 accepted candidate PRs
 │       └── pilot.json               # Phase 0 differential testing ground truth dataset
@@ -79,9 +83,10 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 │   └── label_protocol.md            # Standard operating procedure & exclusion rules (EXC-01..10)
 ├── infra/
 │   └── collector/                   # GCP Cloud Run Job collector & AST diff parser
-├── scripts/                         # Analysis, validation, and differential test runners
+├── scripts/                         # Analysis, validation, and reproduction test runners
 └── tests/
-    └── collector/                   # 56 automated unit & end-to-end tests for collector
+    ├── collector/                   # 56 automated unit & end-to-end tests for collector
+    └── fixtures/                    # Automated reproduction verification test suite
 ```
 
 ---
@@ -89,7 +94,7 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 ## 🚀 Roadmap
 
 - [x] **Phase 0 — Label Protocol Pilot:** Define label protocol, build GCP collector, harvest Tier B candidates, and validate 5 pilot cases with differential testing.
-- [ ] **Phase 1 — Tier A Fixtures:** Construct deterministic synthetic fixture repositories with verified breaking and non-breaking changes.
+- [x] **Phase 1 — Tier A Fixtures:** Construct deterministic synthetic fixture repositories with verified breaking and non-breaking changes.
 - [ ] **Phase 2 — Deterministic Pipeline & Risk Floor:** Build webhook validator, AST usage scanner, release note fetcher, and deterministic risk policy engine.
 - [ ] **Phase 3 — LLM Extraction & Workflow:** Layer structured LLM extraction with quote verification and prompt injection defenses.
 - [ ] **Phase 4 — Benchmark & Evaluation:** Run the agent and baseline comparisons on frozen Tier A and Tier B benchmarks.
@@ -97,10 +102,17 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 
 ---
 
-## 🛠️ Running Collector Tests
+## 🛠️ Running Tests
 
 To run the full collector test suite locally:
 
 ```bash
-uv run --with pytest --with httpx --with packaging pytest -q
+uv run --with pytest --with httpx --with packaging pytest tests/collector -q
 ```
+
+To run the Tier A fixture reproduction suite:
+
+```bash
+uv run --with pytest pytest tests/fixtures -q
+```
+

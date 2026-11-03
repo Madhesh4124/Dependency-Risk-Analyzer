@@ -1,0 +1,35 @@
+{
+  "case_id": "TIER-A-05",
+  "name": "missing_release_notes",
+  "category": "MISSING_RELEASE_NOTES",
+  "description": "Dependency release notes are missing or unavailable; deterministic floor must enforce at least REVIEW.",
+  "package_name": "vault-client",
+  "import_name": "vault_client",
+  "old_version": "0.9.0",
+  "new_version": "1.0.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- vault-client==0.9.0\n+ vault-client==1.0.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/vault-client/releases/tag/v1.0.0",
+    "retrieval_timestamp": "2026-02-15T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": false
+  },
+  "ground_truth": {
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "affected_api": null,
+    "ast_match_confidence": "NONE",
+    "failure_mechanism": "None (tests pass, but lack of release notes forces REVIEW)",
+    "quote_verification_expected": false
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}
+

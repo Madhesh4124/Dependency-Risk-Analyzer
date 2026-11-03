@@ -1,0 +1,35 @@
+{
+  "case_id": "TIER-A-03",
+  "name": "deprecation",
+  "category": "DEPRECATION",
+  "description": "Dependency deprecates request_v1() with a DeprecationWarning exercised by code.",
+  "package_name": "api-client",
+  "import_name": "api_client",
+  "old_version": "1.4.0",
+  "new_version": "1.5.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- api-client==1.4.0\n+ api-client==1.5.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/api-client/releases/tag/v1.5.0",
+    "retrieval_timestamp": "2026-02-10T09:00:00Z",
+    "file_path": "upstream/release_notes.md"
+  },
+  "ground_truth": {
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "affected_api": "api_client.request_v1",
+    "ast_match_confidence": "HIGH",
+    "failure_mechanism": "AssertionError: Expected 0 deprecation warnings, got DeprecationWarning",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "FAIL",
+    "expected_error_type": "AssertionError"
+  }
+}
+

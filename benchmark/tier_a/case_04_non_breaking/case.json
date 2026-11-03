@@ -1,0 +1,34 @@
+{
+  "case_id": "TIER-A-04",
+  "name": "non_breaking",
+  "category": "NON_BREAKING",
+  "description": "Dependency removes render_html_table() but repository only uses bold().",
+  "package_name": "text-styler",
+  "import_name": "text_styler",
+  "old_version": "1.0.0",
+  "new_version": "2.0.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- text-styler==1.0.0\n+ text-styler==2.0.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/text-styler/releases/tag/v2.0.0",
+    "retrieval_timestamp": "2026-02-14T11:00:00Z",
+    "file_path": "upstream/release_notes.md"
+  },
+  "ground_truth": {
+    "expected_verdict": "NO_RISK_FOUND",
+    "risk_floor": "NO_RISK_FOUND",
+    "affected_api": "text_styler.render_html_table",
+    "ast_match_confidence": "NONE",
+    "failure_mechanism": "None (tests pass on both versions)",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}
+

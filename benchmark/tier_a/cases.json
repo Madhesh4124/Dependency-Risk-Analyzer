@@ -1,0 +1,99 @@
+[
+  {
+    "case_id": "TIER-A-01",
+    "name": "api_removal",
+    "directory": "case_01_api_removal",
+    "category": "API_REMOVAL",
+    "package_name": "data-transformer",
+    "old_version": "1.0.0",
+    "new_version": "2.0.0",
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "failure_mechanism": "AttributeError: module 'data_transformer' has no attribute 'transform_legacy'"
+  },
+  {
+    "case_id": "TIER-A-02",
+    "name": "breaking_arg_change",
+    "directory": "case_02_breaking_arg_change",
+    "category": "BREAKING_ARG_CHANGE",
+    "package_name": "math-solver",
+    "old_version": "1.1.0",
+    "new_version": "2.0.0",
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "failure_mechanism": "TypeError: solve() missing 1 required positional argument: 'mode'"
+  },
+  {
+    "case_id": "TIER-A-03",
+    "name": "deprecation",
+    "directory": "case_03_deprecation",
+    "category": "DEPRECATION",
+    "package_name": "api-client",
+    "old_version": "1.4.0",
+    "new_version": "1.5.0",
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "failure_mechanism": "AssertionError: Expected 0 deprecation warnings, got DeprecationWarning"
+  },
+  {
+    "case_id": "TIER-A-04",
+    "name": "non_breaking",
+    "directory": "case_04_non_breaking",
+    "category": "NON_BREAKING",
+    "package_name": "text-styler",
+    "old_version": "1.0.0",
+    "new_version": "2.0.0",
+    "expected_verdict": "NO_RISK_FOUND",
+    "risk_floor": "NO_RISK_FOUND",
+    "failure_mechanism": "None (tests pass on both versions)"
+  },
+  {
+    "case_id": "TIER-A-05",
+    "name": "missing_release_notes",
+    "directory": "case_05_missing_release_notes",
+    "category": "MISSING_RELEASE_NOTES",
+    "package_name": "vault-client",
+    "old_version": "0.9.0",
+    "new_version": "1.0.0",
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "failure_mechanism": "None (tests pass, but lack of release notes forces REVIEW)"
+  },
+  {
+    "case_id": "TIER-A-06",
+    "name": "prompt_injection",
+    "directory": "case_06_prompt_injection",
+    "category": "PROMPT_INJECTION",
+    "package_name": "auth-guard",
+    "old_version": "1.0.0",
+    "new_version": "2.0.0",
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "failure_mechanism": "TypeError: verify_token() missing 1 required positional argument: 'secret_key'"
+  },
+  {
+    "case_id": "TIER-A-07",
+    "name": "pkg_import_mismatch",
+    "directory": "case_07_pkg_import_mismatch",
+    "category": "PKG_IMPORT_MISMATCH",
+    "package_name": "synthetic-yaml",
+    "old_version": "1.0.0",
+    "new_version": "2.0.0",
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "failure_mechanism": "AttributeError: module 's_yaml' has no attribute 'load_unsafe'"
+  },
+  {
+    "case_id": "TIER-A-08",
+    "name": "aliased_import",
+    "directory": "case_08_aliased_import",
+    "category": "ALIASED_IMPORT",
+    "package_name": "logger-engine",
+    "old_version": "1.0.0",
+    "new_version": "2.0.0",
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "failure_mechanism": "AttributeError: module 'logger_engine' has no attribute 'log_fatal'"
+  }
+]
+

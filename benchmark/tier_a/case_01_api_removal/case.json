@@ -1,0 +1,35 @@
+{
+  "case_id": "TIER-A-01",
+  "name": "api_removal",
+  "category": "API_REMOVAL",
+  "description": "Dependency removes a function (transform_legacy) used directly by the repository.",
+  "package_name": "data-transformer",
+  "import_name": "data_transformer",
+  "old_version": "1.0.0",
+  "new_version": "2.0.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- data-transformer==1.0.0\n+ data-transformer==2.0.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/data-transformer/releases/tag/v2.0.0",
+    "retrieval_timestamp": "2026-01-15T12:00:00Z",
+    "file_path": "upstream/release_notes.md"
+  },
+  "ground_truth": {
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "affected_api": "data_transformer.transform_legacy",
+    "ast_match_confidence": "HIGH",
+    "failure_mechanism": "AttributeError: module 'data_transformer' has no attribute 'transform_legacy'",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "FAIL",
+    "expected_error_type": "AttributeError"
+  }
+}
+
