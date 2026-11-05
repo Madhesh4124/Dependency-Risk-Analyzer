@@ -84,9 +84,23 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 ├── infra/
 │   └── collector/                   # GCP Cloud Run Job collector & AST diff parser
 ├── scripts/                         # Analysis, validation, and reproduction test runners
+├── src/
+│   └── risk_agent/                  # Core deterministic risk analyzer package
+│       ├── webhook/                 # HMAC-SHA256 signature validation & delivery deduplication
+│       ├── parser/                  # PR diff & manifest parser (requirements, pyproject, setup.cfg)
+│       ├── resolver/                # Package-to-import module name resolution
+│       ├── fetcher/                 # Strict allowlisted release note fetcher
+│       ├── verifier/                # Normalized token-sequence quote verifier
+│       ├── scanner/                 # Python AST usage detector with confidence tiers
+│       ├── policy/                  # Deterministic verdict policy engine & floor rules
+│       ├── models/                  # Pydantic domain models and schemas
+│       ├── pipeline.py              # End-to-end deterministic evaluation pipeline
+│       └── config.py                # Security thresholds and global configurations
 └── tests/
     ├── collector/                   # 56 automated unit & end-to-end tests for collector
-    └── fixtures/                    # Automated reproduction verification test suite
+    ├── fixtures/                    # Automated reproduction verification test suite
+    ├── unit/                        # 44 unit tests covering all deterministic components
+    └── integration/                 # 8 integration tests validating Tier A fixtures
 ```
 
 ---
@@ -95,8 +109,8 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 
 - [x] **Phase 0 — Label Protocol Pilot:** Define label protocol, build GCP collector, harvest Tier B candidates, and validate 5 pilot cases with differential testing.
 - [x] **Phase 1 — Tier A Fixtures:** Construct deterministic synthetic fixture repositories with verified breaking and non-breaking changes.
-- [ ] **Phase 2 — Deterministic Pipeline & Risk Floor:** Build webhook validator, AST usage scanner, release note fetcher, and deterministic risk policy engine.
-- [ ] **Phase 3 — LLM Extraction & Workflow:** Layer structured LLM extraction with quote verification and prompt injection defenses.
+- [x] **Phase 2 — Deterministic Pipeline & Risk Floor:** Build webhook validator, AST usage scanner, release note fetcher, and deterministic risk policy engine.
+- [ ] **Phase 3 — LLM Extraction & Workflow:** Layer structured LLM extraction with quote verification and prompt injection defenses using Google Vertex AI.
 - [ ] **Phase 4 — Benchmark & Evaluation:** Run the agent and baseline comparisons on frozen Tier A and Tier B benchmarks.
 - [ ] **Phase 5 — Deployment & Demo:** Containerize with `uv` and deploy read-only webhook service to Cloud Run.
 
@@ -104,15 +118,25 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 
 ## 🛠️ Running Tests
 
-To run the full collector test suite locally:
+To run the complete test suite (collector + deterministic pipeline + Tier A fixtures):
 
 ```bash
-uv run --with pytest --with httpx --with packaging pytest tests/collector -q
+uv run pytest
 ```
 
-To run the Tier A fixture reproduction suite:
+To run individual test suites:
 
 ```bash
-uv run --with pytest pytest tests/fixtures -q
+# Deterministic unit tests (44 tests)
+uv run pytest tests/unit -v
+
+# Deterministic integration tests on Tier A (8 tests)
+uv run pytest tests/integration -v
+
+# Tier A fixture ground-truth reproduction suite
+uv run pytest tests/fixtures -v
+
+# GCP collector test suite
+uv run pytest tests/collector -v
 ```
 

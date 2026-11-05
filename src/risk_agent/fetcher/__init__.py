@@ -1,0 +1,2 @@
+"""Allowlisted release-note fetching."""
+
