@@ -40,7 +40,7 @@ class AgentConfig(BaseModel):
         default_factory=lambda: os.getenv("GCP_PROJECT_ID", "dependency-impact-analyzer")
     )
     gcp_region: str = Field(
-        default_factory=lambda: os.getenv("GCP_REGION", "asia-south1")
+        default_factory=lambda: os.getenv("GCP_REGION", "us-central1")
     )
     vertex_ai_model: str = Field(
         default_factory=lambda: os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite")
