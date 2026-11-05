@@ -1,9 +1,9 @@
-"""LLM-based extraction of breaking changes from release notes using Vertex AI (Phase 3)."""
+"""LLM-based extraction of breaking changes from release notes using Vertex AI & Google GenAI (Phase 3)."""
 
+import json
 import logging
+import os
 from typing import Any, List, Optional
-
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from risk_agent.config import DEFAULT_CONFIG
 from risk_agent.extraction.prompts import PROMPT_VERSION, SYSTEM_PROMPT, format_user_prompt
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class LLMExtractor:
-    """Extracts structured breaking change claims from release notes using Vertex AI Gemini models."""
+    """Extracts structured breaking change claims from release notes using Gemini models on Google Cloud."""
 
     def __init__(
         self,
@@ -26,6 +26,7 @@ class LLMExtractor:
         location: Optional[str] = None,
         temperature: Optional[float] = None,
         prompt_version: str = PROMPT_VERSION,
+        api_key: Optional[str] = None,
         llm: Optional[Any] = None,
     ):
         self.model_name = model_name or DEFAULT_CONFIG.vertex_ai_model
@@ -33,32 +34,72 @@ class LLMExtractor:
         self.location = location or DEFAULT_CONFIG.gcp_region
         self.temperature = temperature if temperature is not None else DEFAULT_CONFIG.llm_temperature
         self.prompt_version = prompt_version
+        self.api_key = api_key or os.getenv("GOOGLE_CLOUD_API_KEY") or os.getenv("GEMINI_API_KEY")
         self._custom_llm = llm
-        self._llm_instance = None
+        self._genai_client = None
+        self._langchain_llm = None
 
-    def _get_llm(self) -> Any:
-        """Returns the configured LLM, lazily initializing ChatVertexAI if not provided."""
+    def _invoke_genai_client(self, user_content: str) -> ExtractionResponse:
+        """Invokes the official Google GenAI SDK with structured Pydantic output."""
+        from google import genai
+        from google.genai import types
+
+        client_kwargs = {
+            "vertexai": True,
+            "api_key": self.api_key,
+        }
+        if self.project_id:
+            client_kwargs["project"] = self.project_id
+        if self.location:
+            client_kwargs["location"] = self.location
+
+        client = genai.Client(**client_kwargs)
+
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=ExtractionResponse,
+            temperature=self.temperature,
+        )
+
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=user_content,
+            config=config,
+        )
+
+        if hasattr(response, "parsed") and response.parsed:
+            if isinstance(response.parsed, ExtractionResponse):
+                return response.parsed
+            return ExtractionResponse.model_validate(response.parsed)
+
+        return ExtractionResponse.model_validate_json(response.text)
+
+    def _invoke_custom_or_langchain_llm(self, user_content: str) -> ExtractionResponse:
+        """Invokes a custom or LangChain LLM using RunnableSequence + with_structured_output."""
+        from langchain_core.messages import HumanMessage, SystemMessage
+
         if self._custom_llm is not None:
-            return self._custom_llm
+            llm = self._custom_llm
+        else:
+            from langchain_google_vertexai import ChatVertexAI
 
-        if self._llm_instance is None:
-            try:
-                from langchain_google_vertexai import ChatVertexAI
+            kwargs = {
+                "model_name": self.model_name,
+                "location": self.location,
+                "temperature": self.temperature,
+            }
+            if self.project_id:
+                kwargs["project"] = self.project_id
+            llm = ChatVertexAI(**kwargs)
 
-                kwargs = {
-                    "model_name": self.model_name,
-                    "location": self.location,
-                    "temperature": self.temperature,
-                }
-                if self.project_id:
-                    kwargs["project"] = self.project_id
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=user_content),
+        ]
 
-                self._llm_instance = ChatVertexAI(**kwargs)
-            except Exception as e:
-                logger.error(f"Failed to initialize ChatVertexAI for model {self.model_name}: {e}")
-                raise
-
-        return self._llm_instance
+        structured_chain = llm.with_structured_output(ExtractionResponse)
+        return structured_chain.invoke(messages)
 
     def extract_claims(
         self,
@@ -86,15 +127,16 @@ class LLMExtractor:
             release_notes=release_notes,
         )
 
-        messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=user_content),
-        ]
-
         try:
-            llm = self._get_llm()
-            structured_chain = llm.with_structured_output(ExtractionResponse)
-            response: ExtractionResponse = structured_chain.invoke(messages)
+            # 1. If an explicit custom LLM or mock is injected (e.g. unit tests), use it
+            if self._custom_llm is not None:
+                response = self._invoke_custom_or_langchain_llm(user_content)
+            # 2. If a Google Cloud API key (account-bound auth key) is present, use official Google GenAI
+            elif self.api_key:
+                response = self._invoke_genai_client(user_content)
+            # 3. Otherwise fall back to ChatVertexAI with default ADC
+            else:
+                response = self._invoke_custom_or_langchain_llm(user_content)
 
             extracted_claims: List[ExtractedClaim] = []
             for i, p in enumerate(response.claims, start=1):
@@ -123,8 +165,6 @@ class LLMExtractor:
                 f"LLM extraction failed for {package_name} ({old_version} -> {new_version}): {e}",
                 exc_info=True,
             )
-            # Architectural invariant: model failure must NOT crash the pipeline.
-            # Return empty claims and fall back to REVIEW.
             return LLMExtractionResult(
                 claims=[],
                 overall_risk=SeverityVerdict.REVIEW,
@@ -134,4 +174,3 @@ class LLMExtractor:
                 error_message=str(e),
                 summary="LLM extraction encountered an error; falling back to deterministic floor.",
             )
-
