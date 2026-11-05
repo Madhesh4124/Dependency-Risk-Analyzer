@@ -1,6 +1,7 @@
 """Global configuration and security constraints for Dependency Upgrade Risk Agent."""
 
-from typing import List, Set
+import os
+from typing import List, Optional, Set
 from pydantic import BaseModel, Field
 
 
@@ -33,6 +34,22 @@ class AgentConfig(BaseModel):
 
     # Webhook limits
     webhook_max_payload_bytes: int = 10_000_000  # 10 MB cap
+
+    # Vertex AI / LLM Configuration (Phase 3)
+    gcp_project_id: Optional[str] = Field(
+        default_factory=lambda: os.getenv("GCP_PROJECT_ID", "dependency-impact-analyzer")
+    )
+    gcp_region: str = Field(
+        default_factory=lambda: os.getenv("GCP_REGION", "asia-south1")
+    )
+    vertex_ai_model: str = Field(
+        default_factory=lambda: os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite")
+    )
+    vertex_ai_fallback_model: str = Field(
+        default_factory=lambda: os.getenv("VERTEX_AI_FALLBACK_MODEL", "gemini-2.5-flash")
+    )
+    llm_temperature: float = 0.0
+    prompt_version: str = "v1.0"
 
 
 DEFAULT_CONFIG = AgentConfig()

@@ -76,6 +76,9 @@ class ExtractedClaim(BaseModel):
     affected_api: Optional[str] = None
     quoted_text: str
     description: Optional[str] = None
+    model_id: Optional[str] = None
+    prompt_version: Optional[str] = None
+    is_verified: Optional[bool] = None
 
 
 class QuoteVerificationResult(BaseModel):
@@ -108,4 +111,6 @@ class RiskReport(BaseModel):
     potential_usages: List[UsageMatch] = Field(default_factory=list)
     release_notes_available: bool = True
     source_url: Optional[str] = None
+    model_id: Optional[str] = None
+    prompt_version: Optional[str] = None
     timestamp: str = Field(default_factory=utc_now_iso)

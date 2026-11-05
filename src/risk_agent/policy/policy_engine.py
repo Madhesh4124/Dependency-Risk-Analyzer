@@ -27,6 +27,14 @@ class PolicyEngine:
     """Computes deterministic risk floors and ensures verdict cannot drop below evidence."""
 
     @classmethod
+    def compare_verdicts(cls, v1: SeverityVerdict, v2: SeverityVerdict) -> int:
+        """Compares two severity verdicts.
+
+        Returns >0 if v1 > v2, 0 if equal, <0 if v1 < v2.
+        """
+        return SEVERITY_ORDER[v1] - SEVERITY_ORDER[v2]
+
+    @classmethod
     def evaluate_risk_floor(
         cls,
         bump_type: VersionBumpType,
