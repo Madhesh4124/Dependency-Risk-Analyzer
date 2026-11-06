@@ -120,23 +120,28 @@ Execute the full 3-system evaluation against the frozen benchmark directly insid
 cd ~/Dependency-Risk-Analyzer
 git pull origin main
 
-# 2. Configure Environment & Model Selection:
+# 2. Enable Vertex AI API & Set ADC Quota Project:
+gcloud services enable aiplatform.googleapis.com --project=dependency-impact-analyzer
+gcloud auth application-default set-quota-project dependency-impact-analyzer
+
+# 3. Configure Environment & Model Selection:
 # Use gemini-3.1-flash-lite hosted in us-central1:
 export VERTEX_AI_MODEL="gemini-3.1-flash-lite"
+export GCP_PROJECT_ID="dependency-impact-analyzer"
+export GOOGLE_CLOUD_PROJECT="dependency-impact-analyzer"
 export GCP_REGION="us-central1"
 export GOOGLE_CLOUD_REGION="us-central1"
 
-# 3. Authenticate (Option A or Option B):
-# Option A — Account-Bound API Key or Gemini Key:
-export GOOGLE_CLOUD_API_KEY="your-api-key"
-# Option B — Google Cloud Application Default Credentials (ADC):
+# 4. Authenticate (Option A or Option B):
+# Option A — Google Cloud Application Default Credentials (ADC) [Recommended in Cloud Shell]:
 # gcloud auth application-default login
-# export GOOGLE_CLOUD_PROJECT="dependency-impact-analyzer"
+# Option B — Account-Bound API Key or Gemini Key:
+# export GOOGLE_CLOUD_API_KEY="your-api-key"
 
-# 4. Sync dependencies
+# 5. Sync dependencies
 uv sync
 
-# 5. Run the master evaluation harness against live Vertex AI
+# 6. Run the master evaluation harness against live Vertex AI
 uv run python benchmark/harness.py
 ```
 
