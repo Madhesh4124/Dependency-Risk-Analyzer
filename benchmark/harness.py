@@ -417,7 +417,7 @@ def main():
             "total_benchmark_cases": len(tier_a_results) + len(tier_b_results),
             "tier_a_cases_count": len(tier_a_results),
             "tier_b_cases_count": len(tier_b_results),
-            "model_version": os.getenv("VERTEX_AI_MODEL", "gemini-2.5-flash"),
+            "model_version": os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite"),
             "prompt_version": "v1.0-structured-xml",
             "rules_enforced": [
                 "Counts and denominators reported for all metrics (never bare percentages)",
