@@ -106,7 +106,7 @@ class SingleCallLLMBaseline:
     ):
         self.model_name = model_name or os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite")
         self.project_id = project_id or os.getenv("GCP_PROJECT_ID", "dependency-impact-analyzer")
-        self.location = location or os.getenv("GCP_REGION", "us-central1")
+        self.location = location or os.getenv("GCP_REGION", "global")
         self.api_key = api_key or os.getenv("GOOGLE_CLOUD_API_KEY") or os.getenv("GEMINI_API_KEY")
         self.custom_llm = custom_llm
 

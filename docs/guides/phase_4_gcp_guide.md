@@ -125,12 +125,12 @@ gcloud services enable aiplatform.googleapis.com --project=dependency-impact-ana
 gcloud auth application-default set-quota-project dependency-impact-analyzer
 
 # 3. Configure Environment & Model Selection:
-# Use gemini-3.1-flash-lite hosted in us-central1:
+# Use gemini-3.1-flash-lite with global endpoint:
 export VERTEX_AI_MODEL="gemini-3.1-flash-lite"
 export GCP_PROJECT_ID="dependency-impact-analyzer"
 export GOOGLE_CLOUD_PROJECT="dependency-impact-analyzer"
-export GCP_REGION="us-central1"
-export GOOGLE_CLOUD_REGION="us-central1"
+export GCP_REGION="global"
+export GOOGLE_CLOUD_REGION="global"
 
 # 4. Authenticate (Option A or Option B):
 # Option A — Google Cloud Application Default Credentials (ADC) [Recommended in Cloud Shell]:
