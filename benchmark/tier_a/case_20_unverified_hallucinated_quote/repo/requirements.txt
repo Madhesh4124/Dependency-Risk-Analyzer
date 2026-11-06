@@ -1,1 +1,0 @@
-metric-collector==1.0.0

@@ -40,3 +40,8 @@ scratch/
 .opencode
 
 docs/study_guide_phases_0_to_3.md
+
+# Benchmark Datasets (held private for Kaggle / research release)
+benchmark/frozen_v1/
+benchmark/tier_a/
+benchmark/tier_b/
