@@ -14,7 +14,7 @@ from risk_agent.models.schemas import (
     UsageMatch,
     VersionBumpType,
 )
-from risk_agent.parser.diff_parser import ManifestDiffParser
+from risk_agent.parser.diff_parser import ManifestDiffParser, determine_bump_type
 from risk_agent.policy.policy_engine import PolicyEngine
 from risk_agent.resolver.package_resolver import PackageResolver
 from risk_agent.scanner.ast_scanner import ASTScanner
@@ -36,9 +36,13 @@ class DeterministicPipeline:
         claim_type: ClaimType = ClaimType.BREAKING,
         quoted_claim_text: Optional[str] = None,
         is_release_notes_available: bool = True,
+        package_name: Optional[str] = None,
+        old_version: Optional[str] = None,
+        new_version: Optional[str] = None,
+        bump_type: Optional[VersionBumpType] = None,
     ) -> RiskReport:
         """Evaluates a repository snapshot against a dependency update deterministically."""
-        repo_dir = case_dir / "repo"
+        repo_dir = case_dir / "repo" if (case_dir / "repo").exists() else case_dir
         req_file = repo_dir / "requirements.txt"
         manifest_content = ""
         if req_file.exists():
@@ -46,8 +50,9 @@ class DeterministicPipeline:
                 manifest_content = f.read()
 
         pkgs = ManifestDiffParser.parse_requirements_content(manifest_content)
-        pkg_name = list(pkgs.keys())[0] if pkgs else "unknown"
-        old_ver = pkgs.get(pkg_name, "1.0.0")
+        pkg_name = package_name or (list(pkgs.keys())[0] if pkgs else "unknown")
+        old_ver = old_version or pkgs.get(pkg_name, "1.0.0")
+        new_ver = new_version or "2.0.0"
 
         resolution = PackageResolver.resolve(pkg_name)
 
@@ -76,7 +81,11 @@ class DeterministicPipeline:
                 affected_api=affected_api,
             )
 
-        bump_type = VersionBumpType.MAJOR
+        if bump_type is None:
+            bump_type = determine_bump_type(old_ver, new_ver)
+            if bump_type == VersionBumpType.UNKNOWN:
+                bump_type = VersionBumpType.MAJOR
+
         floor, reasons = PolicyEngine.evaluate_risk_floor(
             bump_type=bump_type,
             release_notes_available=is_release_notes_available,
@@ -90,7 +99,7 @@ class DeterministicPipeline:
         return RiskReport(
             package_name=pkg_name,
             old_version=old_ver,
-            new_version="2.0.0",
+            new_version=new_ver,
             bump_type=bump_type,
             verdict=final_verdict,
             risk_floor=floor,
@@ -117,7 +126,7 @@ class RiskAgentPipeline:
         package_name: Optional[str] = None,
         old_version: Optional[str] = None,
         new_version: Optional[str] = None,
-        bump_type: VersionBumpType = VersionBumpType.MAJOR,
+        bump_type: Optional[VersionBumpType] = None,
         is_release_notes_available: bool = True,
         source_url: Optional[str] = None,
     ) -> RiskReport:
@@ -147,6 +156,11 @@ class RiskAgentPipeline:
 
         if not new_version:
             new_version = "2.0.0"
+
+        if bump_type is None:
+            bump_type = determine_bump_type(old_version, new_version)
+            if bump_type == VersionBumpType.UNKNOWN:
+                bump_type = VersionBumpType.MAJOR
 
         # Step 2: Resolve package to module import names
         resolution = PackageResolver.resolve(package_name)

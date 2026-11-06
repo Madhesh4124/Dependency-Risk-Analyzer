@@ -1,0 +1,34 @@
+{
+  "case_id": "TIER-A-19",
+  "name": "major_bump_clean_documented",
+  "category": "NON_BREAKING",
+  "description": "Major bump with release notes detailing publish_sync removal; repo only uses publish_async.",
+  "package_name": "event-bus",
+  "import_name": "event_bus",
+  "old_version": "1.0.0",
+  "new_version": "2.0.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- event-bus==1.0.0\n+ event-bus==2.0.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/event-bus/releases/tag/v2.0.0",
+    "retrieval_timestamp": "2026-03-01T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": true
+  },
+  "ground_truth": {
+    "expected_verdict": "NO_RISK_FOUND",
+    "risk_floor": "NO_RISK_FOUND",
+    "affected_api": "event_bus.publish_sync",
+    "ast_match_confidence": "NONE",
+    "failure_mechanism": "None (tests pass on both versions)",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}

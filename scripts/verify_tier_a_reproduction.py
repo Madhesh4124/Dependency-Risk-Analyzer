@@ -24,11 +24,12 @@ def run_fixture_test(case_dir: Path, pkg_version: str) -> subprocess.CompletedPr
     existing_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = f"{pkg_dir}{os.pathsep}{repo_dir}{os.pathsep}{existing_pythonpath}"
 
-    cmd = [sys.executable, "-m", "pytest", str(repo_dir / "test_app.py"), "-q", "--disable-warnings"]
+    cmd = [sys.executable, "-m", "pytest", str(repo_dir / "test_app.py"), "-q", "--disable-warnings", "-o", "cache_dir=.pytest_cache"]
     result = subprocess.run(
         cmd,
         cwd=repo_dir,
         env=env,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         timeout=15,
@@ -82,7 +83,7 @@ def main():
             if case_status != "PASS":
                 all_passed = False
 
-            print(f"  [{case_id}] {case_info['name']:<25}: v1={'OK' if v1_pass else 'ERR'} | v2={'OK' if v2_pass else 'ERR'} -> {case_status}")
+            print(f"  [{case_id}] {case_info['name']:<25}: v1={'OK' if v1_pass else 'ERR'} | v2={'OK' if v2_pass else 'ERR'} -> {case_status}", flush=True)
 
             run_results[case_id] = {
                 "name": case_info["name"],

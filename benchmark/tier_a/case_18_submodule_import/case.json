@@ -1,0 +1,35 @@
+{
+  "case_id": "TIER-A-18",
+  "name": "submodule_import",
+  "category": "API_REMOVAL",
+  "description": "Function parse_lat_lon removed from coordinates submodule.",
+  "package_name": "geo-utils",
+  "import_name": "geo_utils",
+  "old_version": "1.0.0",
+  "new_version": "2.0.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- geo-utils==1.0.0\n+ geo-utils==2.0.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/geo-utils/releases/tag/v2.0.0",
+    "retrieval_timestamp": "2026-03-01T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": true
+  },
+  "ground_truth": {
+    "expected_verdict": "RISKY",
+    "risk_floor": "RISKY",
+    "affected_api": "geo_utils.coordinates.parse_lat_lon",
+    "ast_match_confidence": "HIGH",
+    "failure_mechanism": "ImportError: cannot import name 'parse_lat_lon' from 'geo_utils.coordinates'",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "FAIL",
+    "expected_error_type": "ImportError"
+  }
+}

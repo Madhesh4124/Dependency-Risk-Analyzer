@@ -1,0 +1,34 @@
+{
+  "case_id": "TIER-A-16",
+  "name": "indirect_medium_confidence_usage",
+  "category": "BREAKING_METHOD_CHANGE",
+  "description": "Method flush_buffer removed; repo has untyped call obj.flush_buffer().",
+  "package_name": "stream-processor",
+  "import_name": "stream_processor",
+  "old_version": "1.0.0",
+  "new_version": "2.0.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- stream-processor==1.0.0\n+ stream-processor==2.0.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/stream-processor/releases/tag/v2.0.0",
+    "retrieval_timestamp": "2026-03-01T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": true
+  },
+  "ground_truth": {
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "affected_api": "flush_buffer",
+    "ast_match_confidence": "MEDIUM",
+    "failure_mechanism": "None in mock tests, but untyped method match forces REVIEW floor",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}

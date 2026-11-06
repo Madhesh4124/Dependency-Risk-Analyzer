@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-11-03T13:51:43Z",
-  "total_cases": 8,
+  "timestamp": "2026-11-06T07:40:56Z",
+  "total_cases": 20,
   "total_runs": 3,
-  "elapsed_seconds": 35.49,
+  "elapsed_seconds": 539.53,
   "exit_criterion_met": true,
   "runs": [
     {
@@ -53,6 +53,78 @@
         },
         "TIER-A-08": {
           "name": "aliased_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-09": {
+          "name": "class_renamed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-10": {
+          "name": "kwarg_removed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-11": {
+          "name": "return_type_changed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-12": {
+          "name": "non_breaking_patch",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-13": {
+          "name": "non_breaking_minor_addition",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-14": {
+          "name": "deprecation_unexercised",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-15": {
+          "name": "empty_release_notes",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-16": {
+          "name": "indirect_medium_confidence_usage",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-17": {
+          "name": "prompt_injection_html_comment",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-18": {
+          "name": "submodule_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-19": {
+          "name": "major_bump_clean_documented",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-20": {
+          "name": "unverified_hallucinated_quote",
           "v1_status": "PASS",
           "v2_status": "PASS",
           "overall": "PASS"
@@ -110,6 +182,78 @@
           "v1_status": "PASS",
           "v2_status": "PASS",
           "overall": "PASS"
+        },
+        "TIER-A-09": {
+          "name": "class_renamed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-10": {
+          "name": "kwarg_removed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-11": {
+          "name": "return_type_changed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-12": {
+          "name": "non_breaking_patch",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-13": {
+          "name": "non_breaking_minor_addition",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-14": {
+          "name": "deprecation_unexercised",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-15": {
+          "name": "empty_release_notes",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-16": {
+          "name": "indirect_medium_confidence_usage",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-17": {
+          "name": "prompt_injection_html_comment",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-18": {
+          "name": "submodule_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-19": {
+          "name": "major_bump_clean_documented",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-20": {
+          "name": "unverified_hallucinated_quote",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
         }
       }
     },
@@ -161,6 +305,78 @@
         },
         "TIER-A-08": {
           "name": "aliased_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-09": {
+          "name": "class_renamed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-10": {
+          "name": "kwarg_removed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-11": {
+          "name": "return_type_changed",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-12": {
+          "name": "non_breaking_patch",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-13": {
+          "name": "non_breaking_minor_addition",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-14": {
+          "name": "deprecation_unexercised",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-15": {
+          "name": "empty_release_notes",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-16": {
+          "name": "indirect_medium_confidence_usage",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-17": {
+          "name": "prompt_injection_html_comment",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-18": {
+          "name": "submodule_import",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-19": {
+          "name": "major_bump_clean_documented",
+          "v1_status": "PASS",
+          "v2_status": "PASS",
+          "overall": "PASS"
+        },
+        "TIER-A-20": {
+          "name": "unverified_hallucinated_quote",
           "v1_status": "PASS",
           "v2_status": "PASS",
           "overall": "PASS"

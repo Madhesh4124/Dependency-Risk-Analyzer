@@ -37,11 +37,12 @@ def run_fixture_test(case_dir: Path, pkg_version: str) -> subprocess.CompletedPr
     existing_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = f"{pkg_dir}{os.pathsep}{repo_dir}{os.pathsep}{existing_pythonpath}"
 
-    cmd = [sys.executable, "-m", "pytest", str(repo_dir / "test_app.py"), "-q", "--disable-warnings"]
+    cmd = [sys.executable, "-m", "pytest", str(repo_dir / "test_app.py"), "-q", "--disable-warnings", "-o", "cache_dir=.pytest_cache"]
     result = subprocess.run(
         cmd,
         cwd=repo_dir,
         env=env,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         timeout=15,

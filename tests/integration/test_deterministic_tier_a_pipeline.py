@@ -61,12 +61,16 @@ def test_deterministic_pipeline_on_tier_a_fixtures(case_dir: Path, spec: dict):
     # Find a verified quote from release notes if applicable
     quote_text = None
     if raw_content and is_available:
-        # Extract first non-heading sentence/bullet from release notes as quote
-        for line in raw_content.splitlines():
-            s_line = line.strip()
-            if s_line.startswith("-") or ("Removed" in s_line or "Changed" in s_line or "deprecated" in s_line.lower()):
-                quote_text = s_line.lstrip("-* ").strip()
-                break
+        if ground_truth.get("quote_verification_expected") is False:
+            # Simulate a hallucinated quote that fails verification against the release notes
+            quote_text = "Completely fabricated claim that does not exist in release notes at all"
+        else:
+            # Extract first non-heading sentence/bullet from release notes as quote
+            for line in raw_content.splitlines():
+                s_line = line.strip()
+                if s_line.startswith("-") or ("Removed" in s_line or "Changed" in s_line or "deprecated" in s_line.lower()):
+                    quote_text = s_line.lstrip("-* ").strip()
+                    break
 
     # Execute deterministic pipeline
     report = pipeline.evaluate_fixture_case(

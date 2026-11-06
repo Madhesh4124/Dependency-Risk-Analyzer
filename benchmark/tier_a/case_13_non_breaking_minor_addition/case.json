@@ -1,0 +1,34 @@
+{
+  "case_id": "TIER-A-13",
+  "name": "non_breaking_minor_addition",
+  "category": "NON_BREAKING",
+  "description": "Minor upgrade adding new function not used by repository.",
+  "package_name": "math-toolkit",
+  "import_name": "math_toolkit",
+  "old_version": "2.1.0",
+  "new_version": "2.2.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- math-toolkit==2.1.0\n+ math-toolkit==2.2.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/math-toolkit/releases/tag/v2.2.0",
+    "retrieval_timestamp": "2026-03-01T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": true
+  },
+  "ground_truth": {
+    "expected_verdict": "NO_RISK_FOUND",
+    "risk_floor": "NO_RISK_FOUND",
+    "affected_api": "math_toolkit.compute_variance",
+    "ast_match_confidence": "NONE",
+    "failure_mechanism": "None (tests pass on both versions)",
+    "quote_verification_expected": true
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}

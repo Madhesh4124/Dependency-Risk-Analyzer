@@ -1,0 +1,34 @@
+{
+  "case_id": "TIER-A-15",
+  "name": "empty_release_notes",
+  "category": "MISSING_RELEASE_NOTES",
+  "description": "Release notes file exists but contains only blank whitespace.",
+  "package_name": "crypto-helper",
+  "import_name": "crypto_helper",
+  "old_version": "0.8.0",
+  "new_version": "0.9.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- crypto-helper==0.8.0\n+ crypto-helper==0.9.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/crypto-helper/releases/tag/v0.9.0",
+    "retrieval_timestamp": "2026-03-01T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": false
+  },
+  "ground_truth": {
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "affected_api": null,
+    "ast_match_confidence": "HIGH",
+    "failure_mechanism": "None (tests pass, but empty release notes force REVIEW floor)",
+    "quote_verification_expected": false
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}

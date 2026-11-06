@@ -1,0 +1,34 @@
+{
+  "case_id": "TIER-A-20",
+  "name": "unverified_hallucinated_quote",
+  "category": "UNVERIFIED_QUOTE",
+  "description": "Release notes describe enhancements, but LLM claims fabricated breaking change.",
+  "package_name": "metric-collector",
+  "import_name": "metric_collector",
+  "old_version": "1.0.0",
+  "new_version": "1.5.0",
+  "manifest_change": {
+    "file": "requirements.txt",
+    "diff": "- metric-collector==1.0.0\n+ metric-collector==1.5.0"
+  },
+  "release_notes": {
+    "source": "github_releases",
+    "url": "https://github.com/synthetic-ecosystem/metric-collector/releases/tag/v1.5.0",
+    "retrieval_timestamp": "2026-03-01T10:00:00Z",
+    "file_path": "upstream/release_notes.md",
+    "is_available": true
+  },
+  "ground_truth": {
+    "expected_verdict": "REVIEW",
+    "risk_floor": "REVIEW",
+    "affected_api": "metric_collector.record_metric",
+    "ast_match_confidence": "HIGH",
+    "failure_mechanism": "None in mock tests; unverified quote forces REVIEW floor",
+    "quote_verification_expected": false
+  },
+  "reproduction": {
+    "test_command": "pytest test_app.py",
+    "old_version_outcome": "PASS",
+    "new_version_outcome": "PASS"
+  }
+}

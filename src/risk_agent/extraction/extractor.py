@@ -44,10 +44,17 @@ class LLMExtractor:
         from google import genai
         from google.genai import types
 
-        client = genai.Client(
-            vertexai=True,
-            api_key=self.api_key,
-        )
+        client_kwargs = {}
+        if self.api_key:
+            client_kwargs["api_key"] = self.api_key
+        else:
+            client_kwargs["vertexai"] = True
+            if self.project_id:
+                client_kwargs["project"] = self.project_id
+            if self.location:
+                client_kwargs["location"] = self.location
+
+        client = genai.Client(**client_kwargs)
 
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
