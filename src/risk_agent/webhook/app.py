@@ -20,6 +20,7 @@ from risk_agent.security.injection_detector import InjectionDetector
 from risk_agent.webhook.deduplication import DeliveryStore, InMemoryDeliveryStore
 from risk_agent.webhook.firestore_store import FirestoreDeliveryStore, FirestoreReportStore
 from risk_agent.webhook.github_app import GitHubAppAuth
+from risk_agent.webhook.github_checks import GitHubCheckClient
 from risk_agent.webhook.github_client import GitHubCommentClient
 from risk_agent.webhook.pr_commenter import format_pr_comment
 from risk_agent.webhook.validator import (
@@ -51,10 +52,11 @@ report_store = FirestoreReportStore(project_id=PROJECT_ID)
 pipeline = RiskAgentPipeline()
 release_fetcher = ReleaseNoteFetcher()
 
-# Phase 6 Components: Injection Shield, GitHub App Multi-Tenant Auth, and PR Commenter
+# Phase 6 Components: Injection Shield, GitHub App Multi-Tenant Auth, PR Commenter & Checks
 injection_detector = InjectionDetector()
 github_app_auth = GitHubAppAuth()
 github_comment_client = GitHubCommentClient()
+github_check_client = GitHubCheckClient()
 
 
 @app.get("/", tags=["Health"])
@@ -358,7 +360,19 @@ async def receive_webhook(
             token=github_token,
         )
 
-    # 12. Response with assessment details, injection metrics, and PR commenting status
+    # 12. Create GitHub Check Run (Gates the merge button!)
+    check_run_id, check_conclusion = None, "skipped"
+    effective_head_sha = head_sha or pr_data.get("head", {}).get("sha")
+    if repo_full_name and effective_head_sha and effective_head_sha != "HEAD" and github_token:
+        check_run_id, check_conclusion = await github_check_client.create_check_run(
+            repo_full_name=repo_full_name,
+            head_sha=effective_head_sha,
+            report=report,
+            injection_result=injection_res if injection_res.detected else None,
+            token=github_token,
+        )
+
+    # 13. Response with assessment details, injection metrics, PR commenting & Check Run status
     return {
         "status": "processed",
         "delivery_id": delivery_id,
@@ -375,6 +389,8 @@ async def receive_webhook(
         "injection_pattern": injection_res.pattern_type.value if injection_res.pattern_type else None,
         "pr_comment_status": comment_action,
         "pr_comment_id": comment_id,
+        "check_run_status": check_conclusion,
+        "check_run_id": check_run_id,
         "execution_latency_ms": round(elapsed_ms, 2),
     }
 
