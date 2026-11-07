@@ -9,11 +9,13 @@ Formats structured, developer-friendly GitHub Markdown comments with:
 6. Collapsible audit provenance metadata.
 """
 
+import os
 from typing import Optional
 from risk_agent.models.schemas import RiskReport, SeverityVerdict
 from risk_agent.security.injection_detector import InjectionResult
 
 REPORT_SIGNATURE = "<!-- dependency-impact-analyzer-report -->"
+DEFAULT_AGENT_REPO = "https://github.com/Madhesh4124/Dependency-Risk-Analyzer"
 
 
 def is_library_docs_url(url: Optional[str]) -> bool:
@@ -127,6 +129,7 @@ def format_pr_comment(
     # 7. Collapsible Audit & Provenance Metadata
     latency_str = f"{execution_latency_ms:.1f} ms" if execution_latency_ms is not None else "N/A"
     doc_display = f"[{report.documentation_url}]({report.documentation_url})" if report.documentation_url else "_N/A_"
+    agent_repo_url = os.environ.get("AGENT_REPO_URL", DEFAULT_AGENT_REPO)
     lines.extend([
         "<details>",
         "<summary>Analysis & Audit Provenance</summary>",
@@ -141,7 +144,7 @@ def format_pr_comment(
         "</details>",
         "",
         "---",
-        "<sub>*Automated dependency impact evaluation by [Dependency Upgrade Risk Agent](https://github.com/Madhesh4124/dependency-risk-agent).*</sub>",
+        f"<sub>*Automated dependency impact evaluation by [Dependency Upgrade Risk Agent]({agent_repo_url}).*</sub>",
     ])
 
     return "\n".join(lines)
