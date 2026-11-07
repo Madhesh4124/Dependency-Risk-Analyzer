@@ -36,12 +36,17 @@ Thumbs.db
 # Tool-specific & local scratch directories
 .opencode/
 scratch/
+.agent/
 .agent
-.opencode
 
-docs/study_guide_phases_0_to_3.md
+# Study Guides, Label Protocols & Internal Deployment Guides
+docs/study_guide*
+docs/label_protocol.md
+docs/guides/
+infra/**/guide.md
+*.study.*
 
-# Benchmark Datasets (held private for Kaggle / research release)
+# Benchmark Datasets (held private for research release)
 benchmark/frozen_v1/
 benchmark/tier_a/
 benchmark/tier_b/
