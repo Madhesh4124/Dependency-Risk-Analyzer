@@ -80,9 +80,9 @@ async def receive_webhook(
         logger.warning(f"Payload size rejected: {size_err}")
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=size_err)
 
-    # 3. Validate headers
+    # 3. Validate headers (supports both pull_request events and GitHub ping test events)
     headers_dict = dict(request.headers)
-    headers_ok, header_err = validate_webhook_headers(headers_dict, allowed_events={"pull_request"})
+    headers_ok, header_err = validate_webhook_headers(headers_dict, allowed_events={"pull_request", "ping"})
     if not headers_ok:
         logger.warning(f"Webhook header validation failed: {header_err}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=header_err)
@@ -107,6 +107,19 @@ async def receive_webhook(
         logger.info("Webhook secret not configured; bypassing signature check in local dev mode")
 
     delivery_id = x_github_delivery or str(uuid.uuid4())
+
+    # Handle GitHub Ping / Handshake events immediately
+    event_type = (x_github_event or headers_dict.get("x-github-event", "")).lower()
+    if event_type == "ping":
+        logger.info(f"Received GitHub ping event (delivery={delivery_id}); responding 200 OK")
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "pong",
+                "delivery_id": delivery_id,
+                "message": "Dependency Risk Agent webhook endpoint active",
+            },
+        )
 
     # 5. Delivery Deduplication (Firestore / In-Memory)
     if delivery_store.is_duplicate(delivery_id):

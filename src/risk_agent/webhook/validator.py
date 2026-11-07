@@ -41,13 +41,13 @@ def validate_webhook_headers(
 
     Args:
         headers: Case-insensitive or normalized HTTP request headers.
-        allowed_events: Set of allowed GitHub event names (defaults to {'pull_request'}).
+        allowed_events: Set of allowed GitHub event names (defaults to {'pull_request', 'ping'}).
 
     Returns:
         Tuple of (is_valid, error_message).
     """
     if allowed_events is None:
-        allowed_events = {"pull_request"}
+        allowed_events = {"pull_request", "ping"}
 
     # Normalize header keys to lowercase
     norm_headers = {k.lower(): v for k, v in headers.items()}
