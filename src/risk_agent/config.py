@@ -37,10 +37,18 @@ class AgentConfig(BaseModel):
 
     # Vertex AI / LLM Configuration (Phase 3)
     gcp_project_id: Optional[str] = Field(
-        default_factory=lambda: os.getenv("GCP_PROJECT_ID", "dependency-impact-analyzer")
+        default_factory=lambda: (
+            os.getenv("GCP_PROJECT_ID")
+            or os.getenv("GOOGLE_CLOUD_PROJECT")
+            or "dependency-impact-analyzer"
+        )
     )
     gcp_region: str = Field(
-        default_factory=lambda: os.getenv("GCP_REGION", "global")
+        default_factory=lambda: (
+            os.getenv("GCP_REGION")
+            or os.getenv("GOOGLE_CLOUD_REGION")
+            or "global"
+        )
     )
     vertex_ai_model: str = Field(
         default_factory=lambda: os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite")

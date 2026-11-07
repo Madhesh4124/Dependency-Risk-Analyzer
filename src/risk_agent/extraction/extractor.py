@@ -12,6 +12,7 @@ from risk_agent.extraction.schemas import (
     LLMExtractionResult,
 )
 from risk_agent.models.schemas import ExtractedClaim, SeverityVerdict
+from risk_agent.secrets import get_secret
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,13 @@ class LLMExtractor:
         self.location = location or DEFAULT_CONFIG.gcp_region
         self.temperature = temperature if temperature is not None else DEFAULT_CONFIG.llm_temperature
         self.prompt_version = prompt_version
-        self.api_key = api_key or os.getenv("GOOGLE_CLOUD_API_KEY") or os.getenv("GEMINI_API_KEY")
+        self.api_key = (
+            api_key
+            or get_secret("google-api-key", project_id=self.project_id)
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("GOOGLE_CLOUD_API_KEY")
+            or os.getenv("GEMINI_API_KEY")
+        )
         self._custom_llm = llm
         self._genai_client = None
         self._langchain_llm = None

@@ -130,17 +130,7 @@ class RiskAgentPipeline:
         is_release_notes_available: bool = True,
         source_url: Optional[str] = None,
     ) -> RiskReport:
-        """Executes the full pipeline:
-
-        1. Parse repository manifest
-        2. Resolve PyPI distribution to module import names
-        3. Extract candidate claims via Vertex AI LLM
-        4. Verify quotations against raw release notes
-        5. AST-scan repository source for verified affected APIs
-        6. Compute deterministic risk floor
-        7. Compute final verdict = max(floor, llm_suggestion)
-        8. Return comprehensive RiskReport
-        """
+        """Evaluates a local directory fixture case."""
         repo_dir = case_dir / "repo" if (case_dir / "repo").exists() else case_dir
         req_file = repo_dir / "requirements.txt"
         manifest_content = ""
@@ -148,6 +138,34 @@ class RiskAgentPipeline:
             with open(req_file, "r", encoding="utf-8") as f:
                 manifest_content = f.read()
 
+        from risk_agent.scanner.repo_fetcher import RepoSourceFetcher
+        sources = RepoSourceFetcher.load_sources_from_local_dir(repo_dir)
+
+        return self.evaluate_with_sources(
+            sources=sources,
+            raw_release_notes=raw_release_notes,
+            manifest_content=manifest_content,
+            package_name=package_name,
+            old_version=old_version,
+            new_version=new_version,
+            bump_type=bump_type,
+            is_release_notes_available=is_release_notes_available,
+            source_url=source_url,
+        )
+
+    def evaluate_with_sources(
+        self,
+        sources: dict[str, str],
+        raw_release_notes: str,
+        manifest_content: str = "",
+        package_name: Optional[str] = None,
+        old_version: Optional[str] = None,
+        new_version: Optional[str] = None,
+        bump_type: Optional[VersionBumpType] = None,
+        is_release_notes_available: bool = True,
+        source_url: Optional[str] = None,
+    ) -> RiskReport:
+        """Executes the full pipeline against in-memory repository source files."""
         if not package_name:
             pkgs = ManifestDiffParser.parse_requirements_content(manifest_content)
             package_name = list(pkgs.keys())[0] if pkgs else "unknown"
@@ -199,14 +217,14 @@ class RiskAgentPipeline:
                 claim.is_verified = False
                 unverified_claims.append(claim)
 
-        # Step 5: AST Scanning for verified affected APIs
+        # Step 5: AST Scanning for verified affected APIs in sources
         usages: List[UsageMatch] = []
         scanned_symbols = set()
         for claim in verified_claims:
             if claim.affected_api and claim.affected_api not in scanned_symbols:
                 scanned_symbols.add(claim.affected_api)
-                found_usages = self.ast_scanner.scan_directory(
-                    root_dir=repo_dir,
+                found_usages = self.ast_scanner.scan_source_dict(
+                    sources=sources,
                     target_modules=resolution.import_module_names,
                     affected_api=claim.affected_api,
                 )

@@ -164,6 +164,49 @@ class ASTScanner:
         visitor.visit(tree)
         return visitor.matches
 
+    def scan_source_dict(
+        self,
+        sources: Dict[str, str],
+        target_modules: List[str],
+        affected_api: str,
+    ) -> List[UsageMatch]:
+        """Scans in-memory dictionary of {relative_path: source_code} for usages."""
+        target_symbol = affected_api.split(".")[-1]
+        all_matches: List[UsageMatch] = []
+        files_scanned = 0
+        start_time = time.time()
+
+        for rel_path, content in sources.items():
+            if not rel_path.endswith(".py"):
+                continue
+
+            # Check directory exclusions
+            parts = rel_path.replace("\\", "/").split("/")
+            if any(p in EXCLUDED_DIRS for p in parts[:-1]):
+                continue
+
+            if files_scanned >= self.max_file_count:
+                break
+            if time.time() - start_time > self.timeout_seconds:
+                break
+
+            if len(content.encode("utf-8", errors="ignore")) > self.max_file_bytes:
+                continue
+
+            if "\x00" in content:
+                continue
+
+            try:
+                tree = ast.parse(content, filename=rel_path)
+                visitor = FileUsageVisitor(target_modules, target_symbol, rel_path)
+                visitor.visit(tree)
+                all_matches.extend(visitor.matches)
+                files_scanned += 1
+            except Exception:
+                continue
+
+        return all_matches
+
     def scan_directory(
         self,
         root_dir: Path,

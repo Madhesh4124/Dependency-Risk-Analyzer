@@ -19,6 +19,7 @@ from risk_agent.models.schemas import (
     VersionBumpType,
 )
 from risk_agent.pipeline import DeterministicPipeline
+from risk_agent.secrets import get_secret
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +106,25 @@ class SingleCallLLMBaseline:
         custom_llm: Optional[Any] = None,
     ):
         self.model_name = model_name or os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite")
-        self.project_id = project_id or os.getenv("GCP_PROJECT_ID", "dependency-impact-analyzer")
-        self.location = location or os.getenv("GCP_REGION", "global")
-        self.api_key = api_key or os.getenv("GOOGLE_CLOUD_API_KEY") or os.getenv("GEMINI_API_KEY")
+        self.project_id = (
+            project_id
+            or os.getenv("GCP_PROJECT_ID")
+            or os.getenv("GOOGLE_CLOUD_PROJECT")
+            or "dependency-impact-analyzer"
+        )
+        self.location = (
+            location
+            or os.getenv("GCP_REGION")
+            or os.getenv("GOOGLE_CLOUD_REGION")
+            or "global"
+        )
+        self.api_key = (
+            api_key
+            or get_secret("google-api-key", project_id=self.project_id)
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("GOOGLE_CLOUD_API_KEY")
+            or os.getenv("GEMINI_API_KEY")
+        )
         self.custom_llm = custom_llm
 
     def evaluate(

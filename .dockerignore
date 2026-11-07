@@ -1,0 +1,22 @@
+# Ignore local virtualenvs and caches
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+
+# Ignore git and agent artifacts
+.git
+.github
+.agent
+.gemini
+.opencode
+
+# Ignore local benchmark dumps & test scratch
+benchmark/tier_a
+benchmark/tier_b
+benchmark/frozen_v1
+docs/
+tests/
