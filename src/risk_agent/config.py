@@ -19,7 +19,7 @@ class AgentConfig(BaseModel):
 
     # HTTP limits
     http_timeout_seconds: float = 10.0
-    http_max_response_bytes: int = 500_000  # 500 KB cap
+    http_max_response_bytes: int = 5_000_000  # 5 MB cap (supports large PyPI package JSONs like pydantic/pandas)
 
     # Quote Verifier Floor
     min_quote_token_length: int = 6

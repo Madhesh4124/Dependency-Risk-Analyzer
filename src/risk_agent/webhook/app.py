@@ -232,18 +232,24 @@ async def receive_webhook(
     old_version = old_version or "1.0.0"
     new_version = new_version or "2.0.0"
 
-    # Fetch release notes (with allowlist enforcement)
+    # Fetch release notes (with allowlist enforcement and fault tolerance)
     raw_release_notes = payload.get("release_notes", "")
     is_notes_available = bool(raw_release_notes.strip())
 
     if not raw_release_notes and package_name != "unknown":
-        fetch_res = release_fetcher.fetch_pypi_release_notes(
-            package_name=package_name,
-            version=new_version,
-        )
-        if fetch_res.is_available:
-            raw_release_notes = fetch_res.raw_content
-            is_notes_available = True
+        try:
+            fetch_res = release_fetcher.fetch_pypi_release_notes(
+                package_name=package_name,
+                version=new_version,
+            )
+            if fetch_res.is_available:
+                raw_release_notes = fetch_res.raw_content
+                is_notes_available = True
+        except Exception as e:
+            logger.warning(
+                f"Release note fetch failed for {package_name} ({e}); proceeding with deterministic floor fallback"
+            )
+            is_notes_available = False
 
     # 9. Execute Pipeline
     report = pipeline.evaluate_with_sources(
