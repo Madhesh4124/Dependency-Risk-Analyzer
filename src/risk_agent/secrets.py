@@ -31,6 +31,14 @@ SECRET_ENV_ALIASES: Dict[str, List[str]] = {
         "GH_TOKEN",
         "GITHUB_PAT",
     ],
+    "github-app-id": [
+        "GITHUB_APP_ID",
+        "GH_APP_ID",
+    ],
+    "github-app-private-key": [
+        "GITHUB_APP_PRIVATE_KEY",
+        "GH_APP_PRIVATE_KEY",
+    ],
 }
 
 

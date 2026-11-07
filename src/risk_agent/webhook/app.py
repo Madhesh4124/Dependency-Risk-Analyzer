@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
@@ -15,8 +16,12 @@ from risk_agent.parser.diff_parser import ManifestDiffParser
 from risk_agent.pipeline import RiskAgentPipeline
 from risk_agent.scanner.repo_fetcher import RepoSourceFetcher
 from risk_agent.secrets import get_secret
+from risk_agent.security.injection_detector import InjectionDetector
 from risk_agent.webhook.deduplication import DeliveryStore, InMemoryDeliveryStore
 from risk_agent.webhook.firestore_store import FirestoreDeliveryStore, FirestoreReportStore
+from risk_agent.webhook.github_app import GitHubAppAuth
+from risk_agent.webhook.github_client import GitHubCommentClient
+from risk_agent.webhook.pr_commenter import format_pr_comment
 from risk_agent.webhook.validator import (
     validate_github_signature,
     validate_payload_size,
@@ -46,6 +51,11 @@ report_store = FirestoreReportStore(project_id=PROJECT_ID)
 pipeline = RiskAgentPipeline()
 release_fetcher = ReleaseNoteFetcher()
 
+# Phase 6 Components: Injection Shield, GitHub App Multi-Tenant Auth, and PR Commenter
+injection_detector = InjectionDetector()
+github_app_auth = GitHubAppAuth()
+github_comment_client = GitHubCommentClient()
+
 
 @app.get("/", tags=["Health"])
 @app.get("/health", tags=["Health"])
@@ -58,6 +68,8 @@ async def health_check():
         "gcp_project": PROJECT_ID,
         "firestore_dedup_active": getattr(delivery_store, "is_using_firestore", False),
         "firestore_reports_active": getattr(report_store, "is_using_firestore", False),
+        "github_app_configured": github_app_auth.is_app_configured,
+        "injection_shield_active": True,
     }
 
 
@@ -80,9 +92,12 @@ async def receive_webhook(
         logger.warning(f"Payload size rejected: {size_err}")
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=size_err)
 
-    # 3. Validate headers (supports both pull_request events and GitHub ping test events)
+    # 3. Validate headers (supports pull_request, ping, and GitHub App installation events)
     headers_dict = dict(request.headers)
-    headers_ok, header_err = validate_webhook_headers(headers_dict, allowed_events={"pull_request", "ping"})
+    headers_ok, header_err = validate_webhook_headers(
+        headers_dict,
+        allowed_events={"pull_request", "ping", "installation", "installation_repositories"},
+    )
     if not headers_ok:
         logger.warning(f"Webhook header validation failed: {header_err}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=header_err)
@@ -142,6 +157,26 @@ async def receive_webhook(
         logger.error(f"Malformed JSON payload in delivery {delivery_id}: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed JSON")
 
+    # Handle GitHub App lifecycle events
+    if event_type in {"installation", "installation_repositories"}:
+        inst_action = payload.get("action", "unknown")
+        inst_id = payload.get("installation", {}).get("id")
+        account_name = payload.get("installation", {}).get("account", {}).get("login", "unknown")
+        logger.info(
+            f"GitHub App lifecycle event: event={event_type}, action={inst_action}, account={account_name}, installation_id={inst_id}",
+            extra={"event": event_type, "action": inst_action, "installation_id": inst_id, "account": account_name},
+        )
+        return {
+            "status": "handled",
+            "delivery_id": delivery_id,
+            "event": event_type,
+            "action": inst_action,
+            "installation_id": inst_id,
+            "account": account_name,
+        }
+
+    start_time = time.time()
+
     action = payload.get("action")
     if action not in {"opened", "synchronize", "reopened"}:
         logger.info(
@@ -160,18 +195,23 @@ async def receive_webhook(
     repo_full_name = repo_data.get("full_name", "")
     pr_number = pr_data.get("number")
     base_sha = pr_data.get("base", {}).get("sha", "HEAD")
+    installation_id = payload.get("installation", {}).get("id")
 
     logger.info(
-        f"Processing PR #{pr_number} on {repo_full_name} (delivery: {delivery_id})",
+        f"Processing PR #{pr_number} on {repo_full_name} (delivery: {delivery_id}, installation: {installation_id})",
         extra={
             "delivery_id": delivery_id,
             "repo": repo_full_name,
             "pr_number": pr_number,
             "base_sha": base_sha,
+            "installation_id": installation_id,
         },
     )
 
     # 8. Check for dependency bumps
+    # Obtain installation access token (or fallback PAT)
+    github_token = await github_app_auth.get_installation_token(installation_id)
+
     # Best-effort parsing from changed files payload or PR description
     manifest_content = ""
     after_manifest_content = ""
@@ -185,8 +225,7 @@ async def receive_webhook(
         custom_sources = payload["test_sources"]
         manifest_content = custom_sources.get("requirements.txt") or custom_sources.get("pyproject.toml", "")
     elif repo_full_name and base_sha != "HEAD":
-        # Option D: Fetch repository sources from GitHub API
-        github_token = get_secret("github-token", project_id=PROJECT_ID)
+        # Option D: Fetch repository sources from GitHub API using app or PAT token
         source_fetcher = RepoSourceFetcher(github_token=github_token)
         owner_repo = repo_full_name.split("/")
         if len(owner_repo) == 2:
@@ -251,6 +290,25 @@ async def receive_webhook(
             )
             is_notes_available = False
 
+    # 8.5 Security Tripwire: Scan untrusted PR metadata and release notes
+    pr_title = pr_data.get("title", "")
+    pr_body = pr_data.get("body", "")
+    commit_messages = [c.get("message", "") for c in payload.get("commits", []) if isinstance(c, dict)]
+    injection_res = injection_detector.scan_pr(
+        pr_title=pr_title,
+        pr_body=pr_body,
+        release_notes=raw_release_notes,
+        commit_messages=commit_messages,
+    )
+    if injection_res.detected:
+        logger.warning(
+            "Adversarial prompt injection pattern detected in PR #%s on %s: pattern=%s, snippet='%s'",
+            pr_number,
+            repo_full_name,
+            injection_res.pattern_type,
+            injection_res.sanitized_snippet,
+        )
+
     # 9. Execute Pipeline
     report = pipeline.evaluate_with_sources(
         sources=custom_sources,
@@ -278,10 +336,29 @@ async def receive_webhook(
             "new_version": new_version,
             "verdict": report.verdict.value,
             "risk_floor": report.risk_floor.value,
+            "injection_detected": injection_res.detected,
         },
     )
 
-    # 11. Read-Only response (Zero write actions or PR comments)
+    # 11. Format PR Comment & Idempotent Upsert (Phase 6)
+    elapsed_ms = (time.time() - start_time) * 1000.0
+    comment_body = format_pr_comment(
+        report=report,
+        injection_result=injection_res if injection_res.detected else None,
+        delivery_id=delivery_id,
+        execution_latency_ms=elapsed_ms,
+    )
+
+    comment_id, comment_action = None, "skipped"
+    if repo_full_name and pr_number and github_token:
+        comment_id, comment_action = await github_comment_client.post_or_update_comment(
+            repo_full_name=repo_full_name,
+            pr_number=pr_number,
+            comment_body=comment_body,
+            token=github_token,
+        )
+
+    # 12. Response with assessment details, injection metrics, and PR commenting status
     return {
         "status": "processed",
         "delivery_id": delivery_id,
@@ -294,6 +371,11 @@ async def receive_webhook(
         "reasons": report.reasons,
         "verified_claims_count": len(report.verified_claims),
         "potential_usages_count": len(report.potential_usages),
+        "injection_detected": injection_res.detected,
+        "injection_pattern": injection_res.pattern_type.value if injection_res.pattern_type else None,
+        "pr_comment_status": comment_action,
+        "pr_comment_id": comment_id,
+        "execution_latency_ms": round(elapsed_ms, 2),
     }
 
 

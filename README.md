@@ -2,6 +2,12 @@
 
 An automated risk analysis agent that detects breaking changes, API removals, and upgrade risks in Python dependency upgrade pull requests (e.g., Dependabot, Renovate) before merging.
 
+<p align="center">
+  <a href="https://github.com/apps/dependency-impact-analyzer/installations/new">
+    <img src="https://img.shields.io/badge/GitHub%20App-1--Click%20Install-2ea44f?style=for-the-badge&logo=github" alt="1-Click Install GitHub App" />
+  </a>
+</p>
+
 ---
 
 ## 🎯 Project Overview
@@ -80,6 +86,9 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 │       ├── candidates.jsonl         # Canonical dataset of 57 accepted candidate PRs
 │       └── pilot.json               # Phase 0 differential testing ground truth dataset
 ├── docs/
+│   ├── guides/                      # Production guides for Cloud Run & GitHub App
+│   │   ├── phase_5_gcp_guide.md     # Phase 5 GCP Web Console & Cloud Run guide
+│   │   └── phase_6_guide.md         # Phase 6 GitHub App & Model Armor setup guide
 │   └── label_protocol.md            # Standard operating procedure & exclusion rules (EXC-01..10)
 ├── infra/
 │   └── collector/                   # GCP Cloud Run Job collector & AST diff parser
@@ -110,9 +119,10 @@ A critical takeaway from Phase 0 is that **observational GitHub CI is noisy and 
 - [x] **Phase 0 — Label Protocol Pilot:** Define label protocol, build GCP collector, harvest Tier B candidates, and validate 5 pilot cases with differential testing.
 - [x] **Phase 1 — Tier A Fixtures:** Construct deterministic synthetic fixture repositories with verified breaking and non-breaking changes.
 - [x] **Phase 2 — Deterministic Pipeline & Risk Floor:** Build webhook validator, AST usage scanner, release note fetcher, and deterministic risk policy engine.
-- [ ] **Phase 3 — LLM Extraction & Workflow:** Layer structured LLM extraction with quote verification and prompt injection defenses using Google Vertex AI.
-- [ ] **Phase 4 — Benchmark & Evaluation:** Run the agent and baseline comparisons on frozen Tier A and Tier B benchmarks.
-- [ ] **Phase 5 — Deployment & Demo:** Containerize with `uv` and deploy read-only webhook service to Cloud Run.
+- [x] **Phase 3 — LLM Extraction & Workflow:** Layer structured LLM extraction with quote verification and prompt injection defenses using Google Vertex AI.
+- [x] **Phase 4 — Benchmark & Evaluation:** Run the agent and baseline comparisons on frozen Tier A and Tier B benchmarks.
+- [x] **Phase 5 — Deployment & Demo:** Containerize with `uv` and deploy read-only webhook service to Cloud Run ([docs/guides/phase_5_gcp_guide.md](docs/guides/phase_5_gcp_guide.md)).
+- [x] **Phase 6 — 1-Click GitHub App, PR Reporting & Injection Shield:** Author production setup guide, multi-tenant GitHub App auth, prompt injection shield, PR comment formatter, idempotent comment client, and webhook pipeline ([docs/guides/phase_6_guide.md](docs/guides/phase_6_guide.md)).
 
 ---
 
