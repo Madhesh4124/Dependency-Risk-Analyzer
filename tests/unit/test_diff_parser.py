@@ -108,6 +108,26 @@ class TestPyprojectAndSetupCfgParser:
         assert bumps[0].new_version == "8.1.3"
         assert bumps[0].bump_type == VersionBumpType.MINOR
 
+    def test_parse_poetry_and_optional_pyproject(self):
+        before = (
+            '[tool.poetry.dependencies]\n'
+            'python = "^3.10"\n'
+            'pydantic = "^1.10.12"\n'
+            'fastapi = { version = "0.100.0" }\n'
+        )
+        after = (
+            '[tool.poetry.dependencies]\n'
+            'python = "^3.10"\n'
+            'pydantic = "^2.6.0"\n'
+            'fastapi = { version = "0.100.0" }\n'
+        )
+        bumps = ManifestDiffParser.parse_file_pair("pyproject.toml", before, after)
+        assert len(bumps) == 1
+        assert bumps[0].package_name == "pydantic"
+        assert bumps[0].old_version == "1.10.12"
+        assert bumps[0].new_version == "2.6.0"
+        assert bumps[0].bump_type == VersionBumpType.MAJOR
+
     def test_ignore_unsupported_files(self):
         bumps = ManifestDiffParser.parse_file_pair("main.py", "x = 1", "x = 2")
         assert bumps == []

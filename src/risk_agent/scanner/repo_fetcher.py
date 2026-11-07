@@ -64,24 +64,28 @@ class RepoSourceFetcher:
                 data = resp.json()
                 tree = data.get("tree", [])
 
+                manifest_blobs = []
                 py_blobs = []
                 for item in tree:
                     if item.get("type") != "blob":
                         continue
                     path = item.get("path", "")
-                    if not path.endswith(".py"):
-                        continue
-                    parts = path.replace("\\", "/").split("/")
-                    if any(p in EXCLUDED_DIRS for p in parts[:-1]):
-                        continue
-                    size = item.get("size", 0)
-                    if size > self.max_file_bytes:
-                        continue
-                    py_blobs.append(item)
-                    if len(py_blobs) >= self.max_files:
-                        break
+                    filename = path.replace("\\", "/").split("/")[-1].lower()
+                    if filename in {"requirements.txt", "pyproject.toml", "setup.cfg"}:
+                        manifest_blobs.append(item)
+                    elif path.endswith(".py"):
+                        parts = path.replace("\\", "/").split("/")
+                        if any(p in EXCLUDED_DIRS for p in parts[:-1]):
+                            continue
+                        size = item.get("size", 0)
+                        if size > self.max_file_bytes:
+                            continue
+                        if len(py_blobs) < self.max_files:
+                            py_blobs.append(item)
 
-                for blob in py_blobs:
+                # Fetch manifests first, then python files
+                target_blobs = manifest_blobs + py_blobs
+                for blob in target_blobs:
                     path = blob.get("path")
                     blob_url = blob.get("url")
                     if not blob_url:

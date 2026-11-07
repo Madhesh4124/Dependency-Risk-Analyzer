@@ -174,11 +174,16 @@ async def receive_webhook(
     # 8. Check for dependency bumps
     # Best-effort parsing from changed files payload or PR description
     manifest_content = ""
+    after_manifest_content = ""
+    package_name = payload.get("package_name")
+    old_version = payload.get("old_version")
+    new_version = payload.get("new_version")
+
     # Look for requirements or pyproject files in PR files or test payload
     custom_sources: Dict[str, str] = {}
     if "test_sources" in payload:
         custom_sources = payload["test_sources"]
-        manifest_content = custom_sources.get("requirements.txt", "")
+        manifest_content = custom_sources.get("requirements.txt") or custom_sources.get("pyproject.toml", "")
     elif repo_full_name and base_sha != "HEAD":
         # Option D: Fetch repository sources from GitHub API
         github_token = get_secret("github-token", project_id=PROJECT_ID)
@@ -190,13 +195,42 @@ async def receive_webhook(
                 repo=owner_repo[1],
                 commit_sha=base_sha,
             )
-            manifest_content = custom_sources.get("requirements.txt", "")
+            # Find manifest in base sources
+            manifest_content = custom_sources.get("pyproject.toml") or custom_sources.get("requirements.txt", "")
 
-    # Parse dependency changes
-    pkgs = ManifestDiffParser.parse_requirements_content(manifest_content)
-    package_name = payload.get("package_name") or (list(pkgs.keys())[0] if pkgs else "unknown")
-    old_version = payload.get("old_version") or pkgs.get(package_name, "1.0.0")
-    new_version = payload.get("new_version") or "2.0.0"
+            # If PR has head sha, fetch changed manifest from head to detect exact bump
+            head_sha = pr_data.get("head", {}).get("sha")
+            if head_sha:
+                head_sources = await source_fetcher.fetch_sources_from_github(
+                    owner=owner_repo[0],
+                    repo=owner_repo[1],
+                    commit_sha=head_sha,
+                )
+                after_manifest_content = head_sources.get("pyproject.toml") or head_sources.get("requirements.txt", "")
+
+    # Parse before and after manifests to find exact bumped dependency
+    if manifest_content and after_manifest_content and not package_name:
+        manifest_name = "pyproject.toml" if "pyproject.toml" in custom_sources else "requirements.txt"
+        detected_bumps = ManifestDiffParser.parse_file_pair(
+            filename=manifest_name,
+            before_content=manifest_content,
+            after_content=after_manifest_content,
+        )
+        if detected_bumps:
+            first_bump = detected_bumps[0]
+            package_name = first_bump.package_name
+            old_version = first_bump.old_version
+            new_version = first_bump.new_version
+
+    # Fallback to single manifest parsing if diff parsing wasn't possible
+    if not package_name:
+        pkgs = ManifestDiffParser.parse_pyproject_content(manifest_content) if "pyproject.toml" in custom_sources else ManifestDiffParser.parse_requirements_content(manifest_content)
+        package_name = list(pkgs.keys())[0] if pkgs else "unknown"
+        old_version = old_version or pkgs.get(package_name, "1.0.0")
+        new_version = new_version or "2.0.0"
+
+    old_version = old_version or "1.0.0"
+    new_version = new_version or "2.0.0"
 
     # Fetch release notes (with allowlist enforcement)
     raw_release_notes = payload.get("release_notes", "")
