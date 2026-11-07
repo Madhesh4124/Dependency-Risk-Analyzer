@@ -52,6 +52,7 @@ Set strictly minimal least-privilege permissions:
 - **Repository permissions:**
   - `Contents`: **Read-only** (to inspect `requirements.txt`, `pyproject.toml`, and Python AST in-memory).
   - `Pull requests`: **Read & write** (to post and update analysis reports and injection warnings).
+  - `Checks`: **Read & write** (to post check runs that pass or gate PR merges).
   - `Metadata`: **Read-only** (default, required for repository identification).
 - **Subscribe to events:**
   - Check `Pull request`
