@@ -17,9 +17,12 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
+ENV HOME=/app
+ENV UV_CACHE_DIR=/app/.cache/uv
+ENV PATH="/app/.venv/bin:$PATH"
 
-# Security: Create non-root system user
-RUN addgroup --system appgroup && adduser --system --group appuser
+# Security: Create non-root system user with /app as home
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup --home /app appuser
 
 # Copy pyproject and lockfile first for layer caching
 COPY pyproject.toml uv.lock README.md /app/
@@ -33,8 +36,8 @@ COPY src /app/src
 # Install project package
 RUN uv sync --frozen --no-dev
 
-# Chown directory to non-root user
-RUN chown -R appuser:appgroup /app
+# Create cache directory and chown entire app to appuser
+RUN mkdir -p /app/.cache/uv && chown -R appuser:appgroup /app
 
 # Switch to non-root user
 USER appuser
@@ -42,5 +45,5 @@ USER appuser
 # Cloud Run defaults to PORT environment variable (default 8080)
 EXPOSE 8080
 
-# Execute FastAPI webhook application with uvicorn
-CMD ["uv", "run", "uvicorn", "risk_agent.webhook.app:app", "--host", "0.0.0.0", "--port", "8080"]
+# Execute FastAPI webhook application with uvicorn directly from virtualenv
+CMD ["sh", "-c", "uvicorn risk_agent.webhook.app:app --host 0.0.0.0 --port ${PORT:-8080}"]
