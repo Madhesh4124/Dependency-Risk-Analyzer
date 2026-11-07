@@ -32,6 +32,7 @@ class ReleaseNoteSnapshot(BaseModel):
     version: str
     raw_content: str
     source_url: str
+    documentation_url: Optional[str] = None
     retrieval_timestamp: str = Field(default_factory=utc_now_iso)
     is_available: bool = True
     status_code: Optional[int] = 200
@@ -111,6 +112,7 @@ class RiskReport(BaseModel):
     potential_usages: List[UsageMatch] = Field(default_factory=list)
     release_notes_available: bool = True
     source_url: Optional[str] = None
+    documentation_url: Optional[str] = None
     model_id: Optional[str] = None
     prompt_version: Optional[str] = None
     timestamp: str = Field(default_factory=utc_now_iso)

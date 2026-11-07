@@ -2,10 +2,11 @@
 
 Formats structured, developer-friendly GitHub Markdown comments with:
 1. Hidden report signature for idempotent upserting.
-2. Prominent verdict status headers.
+2. Clean, professional verdict status headers (no gratuitous emojis).
 3. Security warning banner when prompt injections are detected.
-4. Grounded changelog quotes and repository blast-radius call sites.
-5. Collapsible audit provenance metadata.
+4. Grounded changelog quotes with clickable links to official library documentation.
+5. Repository blast-radius call sites.
+6. Collapsible audit provenance metadata.
 """
 
 from typing import Optional
@@ -15,24 +16,32 @@ from risk_agent.security.injection_detector import InjectionResult
 REPORT_SIGNATURE = "<!-- dependency-impact-analyzer-report -->"
 
 
+def is_library_docs_url(url: Optional[str]) -> bool:
+    """Returns True if the URL points to official library docs or changelog, not generic registries."""
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return False
+    disallowed_substrings = ["pypi.org/project", "pypi.org/simple", "pypi.python.org"]
+    return not any(sub in url for sub in disallowed_substrings)
+
+
 def format_pr_comment(
     report: RiskReport,
     injection_result: Optional[InjectionResult] = None,
     delivery_id: Optional[str] = None,
     execution_latency_ms: Optional[float] = None,
 ) -> str:
-    """Renders a complete, high-polish GitHub PR comment in Markdown."""
-    # 1. Status Pill & Emoji
+    """Renders a complete, professional GitHub PR comment in clean Markdown."""
+    # 1. Status Title & Verdict Badge (clean, emoji-free)
     verdict = report.verdict
     if verdict == SeverityVerdict.NO_RISK_FOUND:
-        header_title = "🟢 Dependency Impact: NO_RISK_FOUND"
-        verdict_badge = "**🟢 NO_RISK_FOUND**"
+        header_title = "Dependency Impact: NO_RISK_FOUND"
+        verdict_badge = "**NO_RISK_FOUND**"
     elif verdict == SeverityVerdict.REVIEW:
-        header_title = "🟡 Dependency Impact: REVIEW NEEDED"
-        verdict_badge = "**🟡 REVIEW**"
+        header_title = "Dependency Impact: REVIEW NEEDED"
+        verdict_badge = "**REVIEW**"
     else:
-        header_title = "🔴 Dependency Impact: HIGH RISK"
-        verdict_badge = "**🔴 RISKY**"
+        header_title = "Dependency Impact: HIGH RISK"
+        verdict_badge = "**RISKY**"
 
     lines = [
         REPORT_SIGNATURE,
@@ -46,7 +55,7 @@ def format_pr_comment(
         snippet_str = injection_result.sanitized_snippet or "N/A"
         lines.extend([
             "> [!WARNING]",
-            "> ### 🛡️ Security Tripwire: Adversarial Prompt Injection Detected & Quarantined",
+            "> ### Security Tripwire: Adversarial Prompt Injection Detected & Quarantined",
             "> **An adversarial prompt injection attempt was detected in this pull request and was safely defused.**",
             f"> - **Pattern Detected:** `{pattern_str}`",
             f"> - **Defanged Excerpt:** `{snippet_str}`",
@@ -59,12 +68,12 @@ def format_pr_comment(
     lines.extend([
         "| Package | Upgrade | Final Verdict | Risk Floor | Release Notes |",
         "|---|---|---|---|---|",
-        f"| `{report.package_name}` | `{report.old_version}` ➔ `{report.new_version}` ({bump_type_str}) | {verdict_badge} | `{report.risk_floor.value}` | {'✅ Available' if report.release_notes_available else '⚠️ Missing'} |",
+        f"| `{report.package_name}` | `{report.old_version}` -> `{report.new_version}` ({bump_type_str}) | {verdict_badge} | `{report.risk_floor.value}` | {'Available' if report.release_notes_available else 'Missing'} |",
         "",
     ])
 
     # 4. Assessment Summary / Reasons
-    lines.append("### 📋 Assessment Summary")
+    lines.append("### Assessment Summary")
     for reason in report.reasons:
         lines.append(f"- {reason}")
     lines.append("")
@@ -72,7 +81,7 @@ def format_pr_comment(
     # 5. Verified Upstream Breaking Changes / Deprecations
     if report.verified_claims:
         lines.extend([
-            "### 🔬 Verified Upstream Changes",
+            "### Verified Upstream Changes",
             "| Change Type | Affected API | Grounded Quote from Changelog | Verification |",
             "|---|---|---|---|",
         ])
@@ -83,11 +92,19 @@ def format_pr_comment(
             safe_quote = claim.quoted_text.replace("\n", " ").strip()
             if len(safe_quote) > 120:
                 safe_quote = safe_quote[:117] + "..."
-            lines.append(f"| `{claim_type}` | {api_str} | *\"{safe_quote}\"* | ✅ Grounded |")
+
+            # Grounded verification link (strictly if wrt library docs)
+            doc_link = getattr(claim, "doc_url", None) or report.documentation_url
+            if doc_link and is_library_docs_url(doc_link):
+                verification_cell = f"[Verify in Docs]({doc_link})"
+            else:
+                verification_cell = "Grounded"
+
+            lines.append(f"| `{claim_type}` | {api_str} | *\"{safe_quote}\"* | {verification_cell} |")
         lines.append("")
 
     # 6. Repository Call Sites & Blast Radius
-    lines.append("### 🎯 Blast Radius & Code Usages")
+    lines.append("### Blast Radius & Code Usages")
     if report.potential_usages:
         lines.extend([
             "| Repository File | Line | Confidence | Matched Code Symbol |",
@@ -109,12 +126,14 @@ def format_pr_comment(
 
     # 7. Collapsible Audit & Provenance Metadata
     latency_str = f"{execution_latency_ms:.1f} ms" if execution_latency_ms is not None else "N/A"
+    doc_display = f"[{report.documentation_url}]({report.documentation_url})" if report.documentation_url else "_N/A_"
     lines.extend([
         "<details>",
-        "<summary>⚙️ Analysis & Audit Provenance</summary>",
+        "<summary>Analysis & Audit Provenance</summary>",
         "",
         f"- **Analysis Timestamp:** `{report.timestamp}`",
         f"- **Upstream Source URL:** {report.source_url or '_N/A_'}",
+        f"- **Official Documentation:** {doc_display}",
         f"- **GitHub Delivery ID:** `{delivery_id or 'N/A'}`",
         f"- **Evaluation Model:** `{report.model_id or 'Vertex AI Gemini'}`",
         f"- **Prompt Template:** `{report.prompt_version or 'v1.0'}`",

@@ -118,21 +118,49 @@ class ReleaseNoteFetcher:
         raise FetcherSecurityError("Exceeded maximum redirect limit")
 
     def fetch_pypi_release_notes(self, package_name: str, version: str) -> ReleaseNoteSnapshot:
-        """Fetches release description from the official PyPI JSON API."""
-        url = f"https://pypi.org/pypi/{package_name}/json"
+        """Fetches release description and official documentation URLs from the PyPI JSON API."""
+        # Try specific version JSON first, fallback to package-level JSON
+        url = f"https://pypi.org/pypi/{package_name}/{version}/json"
         snapshot = self.fetch_url(url)
+        if not snapshot.is_available or not snapshot.raw_content:
+            url = f"https://pypi.org/pypi/{package_name}/json"
+            snapshot = self.fetch_url(url)
+
         snapshot.package_name = package_name
         snapshot.version = version
+
+        # Canonical PyPI release page
+        canonical_pypi_url = f"https://pypi.org/project/{package_name}/{version}/"
+        snapshot.source_url = canonical_pypi_url
+        snapshot.documentation_url = None
 
         if snapshot.is_available and snapshot.raw_content:
             try:
                 import json
                 data = json.loads(snapshot.raw_content)
-                # Check description in info
                 info = data.get("info", {})
                 description = info.get("description", "")
                 snapshot.raw_content = description
                 snapshot.is_available = bool(description.strip())
+
+                # Extract official library documentation / changelog URL
+                project_urls = info.get("project_urls") or {}
+                docs_candidate = (
+                    project_urls.get("Changelog")
+                    or project_urls.get("Release Notes")
+                    or project_urls.get("Changes")
+                    or project_urls.get("Documentation")
+                    or project_urls.get("Docs")
+                    or info.get("docs_url")
+                )
+                if not docs_candidate:
+                    # Check homepage if it looks like a documentation site
+                    homepage = info.get("home_page") or project_urls.get("Homepage") or ""
+                    if any(term in homepage.lower() for term in ["docs.", "documentation", "readthedocs.io", "github.io"]):
+                        docs_candidate = homepage
+
+                if docs_candidate and (docs_candidate.startswith("http://") or docs_candidate.startswith("https://")):
+                    snapshot.documentation_url = docs_candidate
             except Exception as e:
                 logger.warning("Failed to parse PyPI JSON for %s: %s", package_name, e)
                 snapshot.is_available = False

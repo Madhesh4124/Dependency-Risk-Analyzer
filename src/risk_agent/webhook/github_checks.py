@@ -57,20 +57,20 @@ class GitHubCheckClient:
         if verdict == SeverityVerdict.NO_RISK_FOUND:
             conclusion = "success"
             title = "Passed: No dependency upgrade risk detected"
-            summary = f"Upgrade for `{report.package_name}` ({report.old_version} ➔ {report.new_version}) passed all compatibility and AST checks."
+            summary = f"Upgrade for `{report.package_name}` ({report.old_version} -> {report.new_version}) passed all compatibility and AST checks."
         elif verdict == SeverityVerdict.REVIEW:
             conclusion = "neutral"
             title = "Warning: Manual dependency review required"
-            summary = f"Upgrade for `{report.package_name}` ({report.old_version} ➔ {report.new_version}) requires manual review. Reason: {'; '.join(report.reasons[:2])}"
+            summary = f"Upgrade for `{report.package_name}` ({report.old_version} -> {report.new_version}) requires manual review. Reason: {'; '.join(report.reasons[:2])}"
         else:
             conclusion = "failure"
             title = "Failed: Breaking changes or upgrade risks detected"
-            summary = f"Upgrade for `{report.package_name}` ({report.old_version} ➔ {report.new_version}) identified breaking changes or affected codebase usages."
+            summary = f"Upgrade for `{report.package_name}` ({report.old_version} -> {report.new_version}) identified breaking changes or affected codebase usages."
 
         # If injection was detected, ensure summary highlights security quarantine
         if injection_result and injection_result.detected:
             title = f"{title} [SECURITY ALERT]"
-            summary = f"⚠️ Prompt injection attempt detected & defused!\n\n{summary}"
+            summary = f"Security Alert: Prompt injection attempt detected and quarantined.\n\n{summary}"
 
         now_iso = datetime.now(timezone.utc).isoformat()
         payload: Dict[str, Any] = {

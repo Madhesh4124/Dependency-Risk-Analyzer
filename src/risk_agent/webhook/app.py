@@ -197,6 +197,7 @@ async def receive_webhook(
     repo_full_name = repo_data.get("full_name", "")
     pr_number = pr_data.get("number")
     base_sha = pr_data.get("base", {}).get("sha", "HEAD")
+    head_sha = pr_data.get("head", {}).get("sha") or payload.get("head_sha")
     installation_id = payload.get("installation", {}).get("id")
 
     logger.info(
@@ -276,6 +277,8 @@ async def receive_webhook(
     # Fetch release notes (with allowlist enforcement and fault tolerance)
     raw_release_notes = payload.get("release_notes", "")
     is_notes_available = bool(raw_release_notes.strip())
+    source_url = payload.get("source_url")
+    documentation_url = payload.get("documentation_url")
 
     if not raw_release_notes and package_name != "unknown":
         try:
@@ -286,6 +289,8 @@ async def receive_webhook(
             if fetch_res.is_available:
                 raw_release_notes = fetch_res.raw_content
                 is_notes_available = True
+                source_url = fetch_res.source_url
+                documentation_url = getattr(fetch_res, "documentation_url", None)
         except Exception as e:
             logger.warning(
                 f"Release note fetch failed for {package_name} ({e}); proceeding with deterministic floor fallback"
@@ -320,6 +325,8 @@ async def receive_webhook(
         old_version=old_version,
         new_version=new_version,
         is_release_notes_available=is_notes_available,
+        source_url=source_url,
+        documentation_url=documentation_url,
     )
 
     report_id = str(uuid.uuid4())

@@ -164,6 +164,7 @@ class RiskAgentPipeline:
         bump_type: Optional[VersionBumpType] = None,
         is_release_notes_available: bool = True,
         source_url: Optional[str] = None,
+        documentation_url: Optional[str] = None,
     ) -> RiskReport:
         """Executes the full pipeline against in-memory repository source files."""
         if not package_name:
@@ -264,6 +265,7 @@ class RiskAgentPipeline:
             potential_usages=usages,
             release_notes_available=is_release_notes_available,
             source_url=source_url,
+            documentation_url=documentation_url,
             model_id=model_id,
             prompt_version=prompt_version,
         )
