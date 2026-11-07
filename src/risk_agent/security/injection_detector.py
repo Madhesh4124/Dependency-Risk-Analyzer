@@ -9,9 +9,10 @@ Provides multi-layered defense:
 from dataclasses import dataclass
 from enum import Enum
 import html
+import logging
+import os
 import re
 from typing import Optional, Sequence
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +83,17 @@ _PATTERNS = {
 class InjectionDetector:
     """Scans untrusted pull request data and changelogs for prompt injection and adversarial attacks."""
 
-    def __init__(self, enable_model_armor: bool = False, model_armor_template: Optional[str] = None):
+    def __init__(
+        self,
+        enable_model_armor: Optional[bool] = None,
+        model_armor_template: Optional[str] = None,
+    ):
+        template = model_armor_template or os.getenv("MODEL_ARMOR_TEMPLATE")
+        if enable_model_armor is None:
+            enable_model_armor = bool(template) or os.getenv("ENABLE_MODEL_ARMOR", "").lower() in ("true", "1", "yes")
+
         self.enable_model_armor = enable_model_armor
-        self.model_armor_template = model_armor_template
+        self.model_armor_template = template
 
     def _normalize_text(self, text: str) -> str:
         """Normalizes input text by removing zero-width characters and decoding entities."""

@@ -87,11 +87,11 @@ gcloud secrets create github-webhook-secret \
 
 # 4. Grant Cloud Run Service Account Secret Access
 gcloud secrets add-iam-policy-binding github-app-id \
-    --member="serviceAccount:risk-agent-runner@dependency-impact-analyzer.iam.gserviceaccount.com" \
+    --member="serviceAccount:risk-agent-webhook@dependency-impact-analyzer.iam.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor"
 
 gcloud secrets add-iam-policy-binding github-app-private-key \
-    --member="serviceAccount:risk-agent-runner@dependency-impact-analyzer.iam.gserviceaccount.com" \
+    --member="serviceAccount:risk-agent-webhook@dependency-impact-analyzer.iam.gserviceaccount.com" \
     --role="roles/secretmanager.secretAccessor"
 ```
 
@@ -108,7 +108,8 @@ gcloud services enable modelarmor.googleapis.com
 # 2. Create Model Armor Security Template
 gcloud model-armor templates create pr-security-shield \
     --location=asia-south1 \
-    --filter-config="jailbreak-detection=ENABLED,prompt-injection=ENABLED"
+    --pi-and-jailbreak-filter-settings-enforcement=enabled \
+    --pi-and-jailbreak-filter-settings-confidence-level=medium-and-above
 
 # 3. Grant Cloud Run Service Account Model Armor User role
 gcloud projects add-iam-policy-binding dependency-impact-analyzer \
@@ -133,7 +134,7 @@ gcloud run deploy dependency-risk-agent \
     --image asia-south1-docker.pkg.dev/dependency-impact-analyzer/risk-agent-repo/risk-agent:phase6-v1 \
     --region asia-south1 \
     --platform managed \
-    --service-account risk-agent-runner@dependency-impact-analyzer.iam.gserviceaccount.com \
+    --service-account risk-agent-webhook@dependency-impact-analyzer.iam.gserviceaccount.com \
     --set-env-vars GCP_PROJECT_ID=dependency-impact-analyzer \
     --set-secrets GITHUB_WEBHOOK_SECRET=github-webhook-secret:latest,GITHUB_APP_ID=github-app-id:latest,GITHUB_APP_PRIVATE_KEY=github-app-private-key:latest \
     --min-instances 0 \
