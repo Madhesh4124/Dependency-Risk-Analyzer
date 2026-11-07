@@ -378,6 +378,9 @@ async def receive_webhook(
             injection_result=injection_res if injection_res.detected else None,
             token=github_token,
         )
+        if check_conclusion == "failed" and installation_id:
+            # If check run failed (e.g. 403 due to stale token cache), invalidate cached token
+            github_app_auth.invalidate_token(installation_id)
 
     # 13. Response with assessment details, injection metrics, PR commenting & Check Run status
     return {

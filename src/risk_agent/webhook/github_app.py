@@ -76,6 +76,13 @@ class GitHubAppAuth:
         """Clears the cached installation tokens."""
         self._token_cache.clear()
 
+    def invalidate_token(self, installation_id: Optional[int] = None) -> None:
+        """Evicts cached installation token so the next call forces a fresh exchange."""
+        if installation_id is not None:
+            self._token_cache.pop(installation_id, None)
+        else:
+            self._token_cache.clear()
+
     async def get_installation_token(
         self,
         installation_id: Optional[int] = None,
