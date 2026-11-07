@@ -47,41 +47,62 @@ class LLMExtractor:
         self._langchain_llm = None
 
     def _invoke_genai_client(self, user_content: str) -> ExtractionResponse:
-        """Invokes the official Google GenAI SDK with structured Pydantic output."""
+        """Invokes the official Google GenAI SDK with structured Pydantic output.
+
+        Attempts API key first; if restricted (403 API_KEY_SERVICE_BLOCKED),
+        automatically falls back to Vertex AI native IAM credentials.
+        """
         from google import genai
         from google.genai import types
 
-        client_kwargs = {}
+        def _call_client(use_vertex: bool) -> ExtractionResponse:
+            kwargs = {}
+            if not use_vertex and self.api_key:
+                kwargs["api_key"] = self.api_key
+            else:
+                kwargs["vertexai"] = True
+                if self.project_id:
+                    kwargs["project"] = self.project_id
+                if self.location:
+                    kwargs["location"] = self.location
+
+            client = genai.Client(**kwargs)
+            config = types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=ExtractionResponse,
+                temperature=self.temperature,
+            )
+
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=user_content,
+                config=config,
+            )
+
+            if hasattr(response, "parsed") and response.parsed:
+                if isinstance(response.parsed, ExtractionResponse):
+                    return response.parsed
+                return ExtractionResponse.model_validate(response.parsed)
+
+            return ExtractionResponse.model_validate_json(response.text)
+
+        # 1. Try with API key if configured
         if self.api_key:
-            client_kwargs["api_key"] = self.api_key
-        else:
-            client_kwargs["vertexai"] = True
-            if self.project_id:
-                client_kwargs["project"] = self.project_id
-            if self.location:
-                client_kwargs["location"] = self.location
+            try:
+                return _call_client(use_vertex=False)
+            except Exception as e:
+                err_str = str(e)
+                if "403" in err_str or "PERMISSION_DENIED" in err_str or "API_KEY_SERVICE_BLOCKED" in err_str:
+                    logger.warning(
+                        "API key blocked or restricted (%s); automatically falling back to Vertex AI native credentials",
+                        e,
+                    )
+                    return _call_client(use_vertex=True)
+                raise
 
-        client = genai.Client(**client_kwargs)
-
-        config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_schema=ExtractionResponse,
-            temperature=self.temperature,
-        )
-
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=user_content,
-            config=config,
-        )
-
-        if hasattr(response, "parsed") and response.parsed:
-            if isinstance(response.parsed, ExtractionResponse):
-                return response.parsed
-            return ExtractionResponse.model_validate(response.parsed)
-
-        return ExtractionResponse.model_validate_json(response.text)
+        # 2. Otherwise use Vertex AI directly
+        return _call_client(use_vertex=True)
 
     def _invoke_custom_or_langchain_llm(self, user_content: str) -> ExtractionResponse:
         """Invokes a custom or LangChain LLM using RunnableSequence + with_structured_output."""
