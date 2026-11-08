@@ -101,10 +101,12 @@ Many teams attempt to analyze dependency updates using pure deterministic script
 
 The Dependency Upgrade Risk Agent was benchmarked using the **PyRiskBench** benchmark corpus across **157 diverse cases** executed on Google Cloud with live calls to **Google Cloud Vertex AI (`gemini-3.1-flash-lite`)**. The dataset is published on Kaggle at [madheshraj/python-dependency-upgrade-risk-benchmark](https://www.kaggle.com/datasets/madheshraj/python-dependency-upgrade-risk-benchmark).
 
-#### Corpus Composition (157 Total Cases)
+#### Corpus Composition & Dataset Size
+- **Total Cases:** 157 distinct evaluation cases.
+- **Data Volume:** 156 structured files totaling ~543 KB uncompressed (129 KB compressed distribution package).
 - **Tier A Fixtures (20 cases):** Curated ground-truth test cases covering clean updates, breaking API alterations, active deprecations, dropped Python versions, and adversarial prompt injection attacks (`INSTRUCTION_RESET`, `ROLEPLAY_JAILBREAK`).
 - **Tier B Curated PRs (30 cases):** Real-world open-source dependency pull requests validated through differential test execution in isolated container runtimes.
-- **Tier B Expanded PR Candidates (107 replayable cases):** Harvested from Dependabot and Renovate dependency upgrades across widely used Python ecosystems (`pandas`, `numpy`, `sqlalchemy`, `redis`, `urllib3`, `fastapi`, `pydantic`, etc.).
+- **Tier B Expanded PR Candidates (107 replayable cases):** Harvested from Dependabot and Renovate dependency upgrades across widely used Python ecosystems (`pandas`, `numpy`, `sqlalchemy`, `redis`, `urllib3`, `fastapi`, `pydantic`, etc.) out of 140 candidate PRs collected.
 
 #### 5-Way Systems Compared
 1. **Baseline 1 (SemVer Heuristic):** The standard heuristic used by dependency scanners: flags major version updates as `RISKY` and minor/patch updates as `NO_RISK_FOUND`.
