@@ -1,7 +1,7 @@
 """Evaluation pipelines for Dependency Upgrade Risk Agent (Phase 2 & Phase 3)."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from risk_agent.extraction.extractor import LLMExtractor
 from risk_agent.extraction.schemas import LLMExtractionResult
@@ -176,6 +176,12 @@ class RiskAgentPipeline:
         if not new_version:
             new_version = "2.0.0"
 
+        if isinstance(bump_type, str):
+            try:
+                bump_type = VersionBumpType(bump_type.lower())
+            except Exception:
+                bump_type = None
+
         if bump_type is None:
             bump_type = determine_bump_type(old_version, new_version)
             if bump_type == VersionBumpType.UNKNOWN:
@@ -268,4 +274,34 @@ class RiskAgentPipeline:
             documentation_url=documentation_url,
             model_id=model_id,
             prompt_version=prompt_version,
+        )
+
+    def evaluate_upgrade(
+        self,
+        package_name: str,
+        old_version: str,
+        new_version: str,
+        bump_type: Optional[Any] = None,
+        manifest_diff: str = "",
+        raw_release_notes: str = "",
+        repo_snippets: Optional[dict[str, str]] = None,
+        source_url: Optional[str] = None,
+        **kwargs,
+    ) -> RiskReport:
+        """Alias for evaluate_with_sources providing complete backward and forward compatibility."""
+        bump = bump_type
+        if isinstance(bump, str):
+            try:
+                bump = VersionBumpType(bump.lower())
+            except Exception:
+                bump = None
+        return self.evaluate_with_sources(
+            sources=repo_snippets or {},
+            raw_release_notes=raw_release_notes,
+            manifest_content=manifest_diff,
+            package_name=package_name,
+            old_version=old_version,
+            new_version=new_version,
+            bump_type=bump,
+            source_url=source_url or f"https://pypi.org/project/{package_name}",
         )

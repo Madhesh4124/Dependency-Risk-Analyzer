@@ -180,42 +180,62 @@ class SingleCallLLMBaseline:
             from google import genai
             from google.genai import types
 
-            client_kwargs = {}
+            def _call_client(use_vertex: bool) -> SingleCallEvaluationResponse:
+                client_kwargs = {}
+                if not use_vertex and self.api_key:
+                    client_kwargs["api_key"] = self.api_key
+                else:
+                    client_kwargs["vertexai"] = True
+                    if self.project_id:
+                        client_kwargs["project"] = self.project_id
+                    if self.location:
+                        client_kwargs["location"] = self.location
+
+                client = genai.Client(**client_kwargs)
+                prompt = (
+                    f"You are reviewing a Python dependency upgrade.\n"
+                    f"Package: {package_name} ({old_version} -> {new_version}, bump: {bump_type})\n"
+                    f"Manifest diff:\n{manifest_diff}\n\n"
+                    f"Release Notes:\n{release_notes}\n\n"
+                    f"Repository Code:\n{repo_code_snippets}\n\n"
+                    f"Determine if this upgrade introduces breaking changes for this repository.\n"
+                    f"Choose one verdict: NO_RISK_FOUND, REVIEW, or RISKY."
+                )
+
+                config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=SingleCallEvaluationResponse,
+                    temperature=0.0,
+                )
+                res = client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=config,
+                )
+                if hasattr(res, "parsed") and res.parsed:
+                    if isinstance(res.parsed, SingleCallEvaluationResponse):
+                        return res.parsed
+                    return SingleCallEvaluationResponse.model_validate(res.parsed)
+                return SingleCallEvaluationResponse.model_validate_json(res.text)
+
+            force_vertex = os.getenv("USE_VERTEX_AI", "").lower() in ("true", "1")
+            if force_vertex:
+                return _call_client(use_vertex=True)
+
             if self.api_key:
-                client_kwargs["api_key"] = self.api_key
-            else:
-                client_kwargs["vertexai"] = True
-                if self.project_id:
-                    client_kwargs["project"] = self.project_id
-                if self.location:
-                    client_kwargs["location"] = self.location
+                try:
+                    return _call_client(use_vertex=False)
+                except Exception as e:
+                    err_str = str(e)
+                    if "403" in err_str or "PERMISSION_DENIED" in err_str or "API_KEY_SERVICE_BLOCKED" in err_str:
+                        logger.warning(
+                            "SingleCall baseline API key blocked or restricted (%s); automatically falling back to Vertex AI native credentials",
+                            e,
+                        )
+                        return _call_client(use_vertex=True)
+                    raise
 
-            client = genai.Client(**client_kwargs)
-            prompt = (
-                f"You are reviewing a Python dependency upgrade.\n"
-                f"Package: {package_name} ({old_version} -> {new_version}, bump: {bump_type})\n"
-                f"Manifest diff:\n{manifest_diff}\n\n"
-                f"Release Notes:\n{release_notes}\n\n"
-                f"Repository Code:\n{repo_code_snippets}\n\n"
-                f"Determine if this upgrade introduces breaking changes for this repository.\n"
-                f"Choose one verdict: NO_RISK_FOUND, REVIEW, or RISKY."
-            )
-
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=SingleCallEvaluationResponse,
-                temperature=0.0,
-            )
-            res = client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=config,
-            )
-            if hasattr(res, "parsed") and res.parsed:
-                if isinstance(res.parsed, SingleCallEvaluationResponse):
-                    return res.parsed
-                return SingleCallEvaluationResponse.model_validate(res.parsed)
-            return SingleCallEvaluationResponse.model_validate_json(res.text)
+            return _call_client(use_vertex=True)
         except Exception as e:
             logger.error(f"Live GenAI single-call execution failed: {e}")
             raise

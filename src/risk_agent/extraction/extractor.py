@@ -87,6 +87,10 @@ class LLMExtractor:
 
             return ExtractionResponse.model_validate_json(response.text)
 
+        force_vertex = os.getenv("USE_VERTEX_AI", "").lower() in ("true", "1")
+        if force_vertex:
+            return _call_client(use_vertex=True)
+
         # 1. Try with API key if configured
         if self.api_key:
             try:
