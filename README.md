@@ -119,8 +119,8 @@ The benchmark was evaluated across the full 157-case corpus on Google Cloud usin
 
 | System Under Evaluation | Accuracy | False Alarm Rate | False Safe Rate | Operational Behavioral Profile |
 | :--- | :---: | :---: | :---: | :--- |
-| **System 5: Full Hybrid Risk Agent Pipeline** | **65.0%** | **3.3%** 🏆 | 68.1% | **Near-zero false alarms (developer noise suppression)**; multi-step quote verification filters out false positives while policy floor guarantees injection safety |
-| **Baseline 4: Direct Single LLM Call (Gemini)** | 59.2% | 13.5% | 51.3% | **4x higher false alarm rate**; easily tricked by prompt injection in changelogs and confuses non-breaking deprecations with active breakages |
+| **System 5: Full Hybrid Risk Agent Pipeline** | **65.0%** | **3.4%** 🏆 | 68.1% | **Near-zero false alarms (developer noise suppression)**; multi-step quote verification filters out false positives while policy floor guarantees injection safety |
+| **Baseline 4: Direct Single LLM Call (Gemini)** | 59.2% | 14.6% | 48.9% | **4.3x higher false alarm rate**; easily tricked by prompt injection in changelogs and confuses non-breaking deprecations with active breakages |
 | **Baseline 2: Green CI Parity** | 85.4% | 2.2% | 0.0% | High accuracy on well-tested codebases, but entirely blind to unexercised APIs, missing test coverage, or delayed runtime failures |
 | **Baseline 1: SemVer Heuristic** | 58.6% | 18.0% | 59.6% | High false safe rate; major bumps frequently do not impact repository call sites, while minor bumps regularly introduce silent breaking changes |
 | **Baseline 3: Pure AST Static Analysis** | 9.6% | 95.5% 🚨 | 0.0% | **Completely unusable in isolation**; without release-note semantic grounding, it treats every referenced library as breaking, causing 95%+ false alarms |
@@ -129,8 +129,8 @@ The benchmark was evaluated across the full 157-case corpus on Google Cloud usin
 
 1. **Elimination of Developer Alert Fatigue (False Alarms):**
    - Pure AST scanning causes a catastrophic **95.5% false alarm rate**, crying wolf on almost every dependency update.
-   - Direct Single LLM calls produce a **13.5% false alarm rate** (4x higher noise).
-   - **System 5 slashes false alarms down to 3.3%**, giving developers confidence that warnings correspond to real, verified breaking risks.
+   - Direct Single LLM calls produce a **14.6% false alarm rate** (4.3x higher noise).
+   - **System 5 slashes false alarms down to 3.4%**, giving developers confidence that warnings correspond to real, verified breaking risks.
 
 2. **Superior Accuracy Over Single LLM & SemVer:**
    - The Hybrid Agent achieves **65.0% aggregate exact accuracy**, outperforming both the industry SemVer heuristic (+6.4%) and unconstrained direct LLM prompting (+5.8%).
