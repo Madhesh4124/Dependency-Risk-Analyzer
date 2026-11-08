@@ -32,7 +32,12 @@ class LLMExtractor:
     ):
         self.model_name = model_name or DEFAULT_CONFIG.vertex_ai_model
         self.project_id = project_id or DEFAULT_CONFIG.gcp_project_id
-        self.location = location or DEFAULT_CONFIG.gcp_region
+        self.location = (
+            location
+            or os.getenv("VERTEX_AI_LOCATION")
+            or getattr(DEFAULT_CONFIG, "vertex_ai_location", "global")
+            or "global"
+        )
         self.temperature = temperature if temperature is not None else DEFAULT_CONFIG.llm_temperature
         self.prompt_version = prompt_version
         self.api_key = (
@@ -55,7 +60,7 @@ class LLMExtractor:
         from google import genai
         from google.genai import types
 
-        def _call_client(use_vertex: bool) -> ExtractionResponse:
+        def _call_client(use_vertex: bool, loc: Optional[str] = None) -> ExtractionResponse:
             kwargs = {}
             if not use_vertex and self.api_key:
                 kwargs["api_key"] = self.api_key
@@ -63,8 +68,9 @@ class LLMExtractor:
                 kwargs["vertexai"] = True
                 if self.project_id:
                     kwargs["project"] = self.project_id
-                if self.location:
-                    kwargs["location"] = self.location
+                target_loc = loc or self.location
+                if target_loc:
+                    kwargs["location"] = target_loc
 
             client = genai.Client(**kwargs)
             config = types.GenerateContentConfig(
@@ -87,9 +93,24 @@ class LLMExtractor:
 
             return ExtractionResponse.model_validate_json(response.text)
 
+        def _call_with_vertex_fallback() -> ExtractionResponse:
+            try:
+                return _call_client(use_vertex=True)
+            except Exception as e:
+                err_str = str(e)
+                if ("404" in err_str or "NOT_FOUND" in err_str) and (self.location != "global"):
+                    logger.warning(
+                        "Vertex AI model %s not found in endpoint %s; automatically falling back to 'global': %s",
+                        self.model_name,
+                        self.location,
+                        e,
+                    )
+                    return _call_client(use_vertex=True, loc="global")
+                raise
+
         force_vertex = os.getenv("USE_VERTEX_AI", "").lower() in ("true", "1")
         if force_vertex:
-            return _call_client(use_vertex=True)
+            return _call_with_vertex_fallback()
 
         # 1. Try with API key if configured
         if self.api_key:
@@ -102,11 +123,11 @@ class LLMExtractor:
                         "API key blocked or restricted (%s); automatically falling back to Vertex AI native credentials",
                         e,
                     )
-                    return _call_client(use_vertex=True)
+                    return _call_with_vertex_fallback()
                 raise
 
         # 2. Otherwise use Vertex AI directly
-        return _call_client(use_vertex=True)
+        return _call_with_vertex_fallback()
 
     def _invoke_custom_or_langchain_llm(self, user_content: str) -> ExtractionResponse:
         """Invokes a custom or LangChain LLM using RunnableSequence + with_structured_output."""

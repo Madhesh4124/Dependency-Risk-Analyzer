@@ -15,6 +15,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV USE_VERTEX_AI=true
 ENV GCP_PROJECT_ID=dependency-impact-analyzer
 ENV GCP_REGION=asia-south1
+ENV VERTEX_AI_LOCATION=global
 ENV VERTEX_AI_MODEL=gemini-3.1-flash-lite
 
 # Copy package configurations

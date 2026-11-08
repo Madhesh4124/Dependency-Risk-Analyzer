@@ -47,6 +47,12 @@ class AgentConfig(BaseModel):
         default_factory=lambda: (
             os.getenv("GCP_REGION")
             or os.getenv("GOOGLE_CLOUD_REGION")
+            or "asia-south1"
+        )
+    )
+    vertex_ai_location: str = Field(
+        default_factory=lambda: (
+            os.getenv("VERTEX_AI_LOCATION")
             or "global"
         )
     )

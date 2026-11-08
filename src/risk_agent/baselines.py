@@ -114,8 +114,7 @@ class SingleCallLLMBaseline:
         )
         self.location = (
             location
-            or os.getenv("GCP_REGION")
-            or os.getenv("GOOGLE_CLOUD_REGION")
+            or os.getenv("VERTEX_AI_LOCATION")
             or "global"
         )
         self.api_key = (
@@ -180,7 +179,7 @@ class SingleCallLLMBaseline:
             from google import genai
             from google.genai import types
 
-            def _call_client(use_vertex: bool) -> SingleCallEvaluationResponse:
+            def _call_client(use_vertex: bool, loc: Optional[str] = None) -> SingleCallEvaluationResponse:
                 client_kwargs = {}
                 if not use_vertex and self.api_key:
                     client_kwargs["api_key"] = self.api_key
@@ -188,8 +187,9 @@ class SingleCallLLMBaseline:
                     client_kwargs["vertexai"] = True
                     if self.project_id:
                         client_kwargs["project"] = self.project_id
-                    if self.location:
-                        client_kwargs["location"] = self.location
+                    target_loc = loc or self.location
+                    if target_loc:
+                        client_kwargs["location"] = target_loc
 
                 client = genai.Client(**client_kwargs)
                 prompt = (
@@ -218,9 +218,24 @@ class SingleCallLLMBaseline:
                     return SingleCallEvaluationResponse.model_validate(res.parsed)
                 return SingleCallEvaluationResponse.model_validate_json(res.text)
 
+            def _call_with_vertex_fallback() -> SingleCallEvaluationResponse:
+                try:
+                    return _call_client(use_vertex=True)
+                except Exception as e:
+                    err_str = str(e)
+                    if ("404" in err_str or "NOT_FOUND" in err_str) and (self.location != "global"):
+                        logger.warning(
+                            "SingleCall baseline model %s not found in endpoint %s; automatically falling back to 'global': %s",
+                            self.model_name,
+                            self.location,
+                            e,
+                        )
+                        return _call_client(use_vertex=True, loc="global")
+                    raise
+
             force_vertex = os.getenv("USE_VERTEX_AI", "").lower() in ("true", "1")
             if force_vertex:
-                return _call_client(use_vertex=True)
+                return _call_with_vertex_fallback()
 
             if self.api_key:
                 try:
@@ -232,10 +247,10 @@ class SingleCallLLMBaseline:
                             "SingleCall baseline API key blocked or restricted (%s); automatically falling back to Vertex AI native credentials",
                             e,
                         )
-                        return _call_client(use_vertex=True)
+                        return _call_with_vertex_fallback()
                     raise
 
-            return _call_client(use_vertex=True)
+            return _call_with_vertex_fallback()
         except Exception as e:
             logger.error(f"Live GenAI single-call execution failed: {e}")
             raise
