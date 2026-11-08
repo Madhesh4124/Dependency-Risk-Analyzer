@@ -86,8 +86,14 @@ class ScaleBenchmarkRunner:
             bump_type = "major" if "2.0.0" in new_ver else "minor"
             expected_verdict = spec.get("ground_truth", {}).get("expected_verdict") or spec.get("expected_verdict", "RISKY")
 
-            notes_file = case_dir / spec.get("release_notes", {}).get("file_path", "upstream/release_notes.md")
-            raw_release_notes = notes_file.read_text(encoding="utf-8") if notes_file.exists() else ""
+            rn_meta = spec.get("release_notes")
+            if isinstance(rn_meta, dict):
+                notes_file = case_dir / rn_meta.get("file_path", "upstream/release_notes.md")
+                raw_release_notes = notes_file.read_text(encoding="utf-8") if notes_file.exists() else ""
+            elif isinstance(rn_meta, str):
+                raw_release_notes = rn_meta
+            else:
+                raw_release_notes = ""
             manifest_diff = spec.get("manifest_change", {}).get("diff", f"- {pkg_name}=={old_ver}\n+ {pkg_name}=={new_ver}")
 
             repo_files = list((case_dir / "repo").glob("*.py"))
