@@ -1,0 +1,398 @@
+{
+  "task_index": 0,
+  "task_count": 1,
+  "cases_evaluated": 157,
+  "systems": {
+    "b1_semver": {
+      "name": "Baseline 1: SemVer Heuristic",
+      "metrics": {
+        "total_evaluated": 157,
+        "exact_accuracy": {
+          "count": "92/157",
+          "percentage": "58.6%",
+          "ci_95": [
+            0.5078,
+            0.6601
+          ]
+        },
+        "false_no_risk_found_rate": {
+          "count": "28/47",
+          "percentage": "59.6%",
+          "ci_95": [
+            0.4534,
+            0.7236
+          ]
+        },
+        "false_alarm_rate": {
+          "count": "16/89",
+          "percentage": "18.0%",
+          "ci_95": [
+            0.1138,
+            0.2723
+          ]
+        },
+        "confusion_matrix": {
+          "tp": 19,
+          "fn": 28,
+          "tn": 73,
+          "fp": 16
+        },
+        "precision": 0.5429,
+        "recall": 0.4043,
+        "f1_score": 0.4634,
+        "latency": {
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "b2_green_ci": {
+      "name": "Baseline 2: Green CI Parity",
+      "metrics": {
+        "total_evaluated": 157,
+        "exact_accuracy": {
+          "count": "134/157",
+          "percentage": "85.4%",
+          "ci_95": [
+            0.7898,
+            0.9004
+          ]
+        },
+        "false_no_risk_found_rate": {
+          "count": "0/47",
+          "percentage": "0.0%",
+          "ci_95": [
+            0.0,
+            0.0756
+          ]
+        },
+        "false_alarm_rate": {
+          "count": "2/89",
+          "percentage": "2.2%",
+          "ci_95": [
+            0.0062,
+            0.0783
+          ]
+        },
+        "confusion_matrix": {
+          "tp": 47,
+          "fn": 0,
+          "tn": 87,
+          "fp": 2
+        },
+        "precision": 0.9592,
+        "recall": 1.0,
+        "f1_score": 0.9792,
+        "latency": {
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "b3_pure_ast": {
+      "name": "Baseline 3: Pure AST Static Analysis",
+      "metrics": {
+        "total_evaluated": 157,
+        "exact_accuracy": {
+          "count": "15/157",
+          "percentage": "9.6%",
+          "ci_95": [
+            0.0588,
+            0.1516
+          ]
+        },
+        "false_no_risk_found_rate": {
+          "count": "0/47",
+          "percentage": "0.0%",
+          "ci_95": [
+            0.0,
+            0.0756
+          ]
+        },
+        "false_alarm_rate": {
+          "count": "85/89",
+          "percentage": "95.5%",
+          "ci_95": [
+            0.8901,
+            0.9824
+          ]
+        },
+        "confusion_matrix": {
+          "tp": 47,
+          "fn": 0,
+          "tn": 4,
+          "fp": 85
+        },
+        "precision": 0.3561,
+        "recall": 1.0,
+        "f1_score": 0.5251,
+        "latency": {
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "b4_single_llm": {
+      "name": "Baseline 4: Direct Single LLM Call (Gemini)",
+      "metrics": {
+        "total_evaluated": 157,
+        "exact_accuracy": {
+          "count": "101/157",
+          "percentage": "64.3%",
+          "ci_95": [
+            0.5658,
+            0.714
+          ]
+        },
+        "false_no_risk_found_rate": {
+          "count": "34/47",
+          "percentage": "72.3%",
+          "ci_95": [
+            0.5824,
+            0.8306
+          ]
+        },
+        "false_alarm_rate": {
+          "count": "3/89",
+          "percentage": "3.4%",
+          "ci_95": [
+            0.0115,
+            0.0945
+          ]
+        },
+        "confusion_matrix": {
+          "tp": 13,
+          "fn": 34,
+          "tn": 86,
+          "fp": 3
+        },
+        "precision": 0.8125,
+        "recall": 0.2766,
+        "f1_score": 0.4127,
+        "latency": {
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    },
+    "s5_hybrid_agent": {
+      "name": "System 5: Full Hybrid Risk Agent Pipeline",
+      "metrics": {
+        "total_evaluated": 157,
+        "exact_accuracy": {
+          "count": "103/157",
+          "percentage": "65.6%",
+          "ci_95": [
+            0.5788,
+            0.7258
+          ]
+        },
+        "false_no_risk_found_rate": {
+          "count": "32/47",
+          "percentage": "68.1%",
+          "ci_95": [
+            0.5383,
+            0.796
+          ]
+        },
+        "false_alarm_rate": {
+          "count": "4/89",
+          "percentage": "4.5%",
+          "ci_95": [
+            0.0176,
+            0.1099
+          ]
+        },
+        "confusion_matrix": {
+          "tp": 15,
+          "fn": 32,
+          "tn": 85,
+          "fp": 4
+        },
+        "precision": 0.7895,
+        "recall": 0.3191,
+        "f1_score": 0.4545,
+        "latency": {
+          "p50": 0.0,
+          "p90": 0.0,
+          "p95": 0.0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      }
+    }
+  },
+  "bump_type_stratification": {
+    "MAJOR": {
+      "count": 36,
+      "s5_hybrid_accuracy": {
+        "count": "27/36",
+        "percentage": "75.0%",
+        "ci_95": [
+          0.5893,
+          0.8625
+        ]
+      },
+      "b1_semver_accuracy": {
+        "count": "19/36",
+        "percentage": "52.8%",
+        "ci_95": [
+          0.3701,
+          0.6801
+        ]
+      }
+    },
+    "MINOR": {
+      "count": 93,
+      "s5_hybrid_accuracy": {
+        "count": "53/93",
+        "percentage": "57.0%",
+        "ci_95": [
+          0.4685,
+          0.6658
+        ]
+      },
+      "b1_semver_accuracy": {
+        "count": "50/93",
+        "percentage": "53.8%",
+        "ci_95": [
+          0.4368,
+          0.6355
+        ]
+      }
+    },
+    "PATCH": {
+      "count": 28,
+      "s5_hybrid_accuracy": {
+        "count": "23/28",
+        "percentage": "82.1%",
+        "ci_95": [
+          0.6441,
+          0.9212
+        ]
+      },
+      "b1_semver_accuracy": {
+        "count": "23/28",
+        "percentage": "82.1%",
+        "ci_95": [
+          0.6441,
+          0.9212
+        ]
+      }
+    }
+  },
+  "results_sample": [
+    {
+      "case_id": "TIER-A-03",
+      "package_name": "api-client",
+      "tier": "TIER_A",
+      "bump_type": "MINOR",
+      "ground_truth": "REVIEW",
+      "predictions": {
+        "b1_semver": "NO_RISK_FOUND",
+        "b2_green_ci": "RISKY",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "RISKY",
+        "s5_hybrid_agent": "RISKY"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 844.65
+      }
+    },
+    {
+      "case_id": "TIER-A-01",
+      "package_name": "data-transformer",
+      "tier": "TIER_A",
+      "bump_type": "MAJOR",
+      "ground_truth": "RISKY",
+      "predictions": {
+        "b1_semver": "RISKY",
+        "b2_green_ci": "RISKY",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "RISKY",
+        "s5_hybrid_agent": "RISKY"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 846.25
+      }
+    },
+    {
+      "case_id": "TIER-A-04",
+      "package_name": "text-styler",
+      "tier": "TIER_A",
+      "bump_type": "MAJOR",
+      "ground_truth": "NO_RISK_FOUND",
+      "predictions": {
+        "b1_semver": "RISKY",
+        "b2_green_ci": "NO_RISK_FOUND",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "RISKY",
+        "s5_hybrid_agent": "RISKY"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 797.27
+      }
+    },
+    {
+      "case_id": "TIER-A-02",
+      "package_name": "math-solver",
+      "tier": "TIER_A",
+      "bump_type": "MAJOR",
+      "ground_truth": "RISKY",
+      "predictions": {
+        "b1_semver": "RISKY",
+        "b2_green_ci": "RISKY",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "RISKY",
+        "s5_hybrid_agent": "RISKY"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 851.27
+      }
+    },
+    {
+      "case_id": "TIER-A-05",
+      "package_name": "vault-client",
+      "tier": "TIER_A",
+      "bump_type": "MINOR",
+      "ground_truth": "REVIEW",
+      "predictions": {
+        "b1_semver": "NO_RISK_FOUND",
+        "b2_green_ci": "RISKY",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "REVIEW",
+        "s5_hybrid_agent": "REVIEW"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 0.0
+      }
+    }
+  ]
+}

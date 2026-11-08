@@ -16,6 +16,8 @@ htmlcov/
 venv/
 env/
 ENV/
+dist/
+*.zip
 
 # Credentials, Secrets & Local Environment Configs
 .env
