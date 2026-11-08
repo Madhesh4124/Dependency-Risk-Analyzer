@@ -22,7 +22,6 @@ RUN uv sync --frozen --no-install-project --no-dev
 # Copy application source and benchmark files
 COPY src /app/src
 COPY benchmark /app/benchmark
-COPY docs /app/docs
 
 # Install project package
 RUN uv sync --frozen --no-dev
