@@ -7,7 +7,9 @@ Covers:
 
 import logging
 import os
+import random
 import re
+import time
 from pathlib import Path
 from typing import Any, List, Optional
 from pydantic import BaseModel, Field
@@ -207,11 +209,33 @@ class SingleCallLLMBaseline:
                     response_schema=SingleCallEvaluationResponse,
                     temperature=0.0,
                 )
-                res = client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=config,
-                )
+                max_retries = 5
+                res = None
+                for attempt in range(max_retries):
+                    try:
+                        res = client.models.generate_content(
+                            model=self.model_name,
+                            contents=prompt,
+                            config=config,
+                        )
+                        break
+                    except Exception as exc:
+                        exc_str = str(exc)
+                        if (
+                            "429" in exc_str
+                            or "RESOURCE_EXHAUSTED" in exc_str
+                            or "rate limit" in exc_str.lower()
+                        ) and attempt < max_retries - 1:
+                            backoff = (2 ** attempt) + random.uniform(1.0, 3.0)
+                            logger.warning(
+                                "SingleCall rate limited on Vertex AI (429 RESOURCE_EXHAUSTED). Retrying in %.2fs (attempt %d/%d)...",
+                                backoff,
+                                attempt + 1,
+                                max_retries,
+                            )
+                            time.sleep(backoff)
+                        else:
+                            raise
                 if hasattr(res, "parsed") and res.parsed:
                     if isinstance(res.parsed, SingleCallEvaluationResponse):
                         return res.parsed

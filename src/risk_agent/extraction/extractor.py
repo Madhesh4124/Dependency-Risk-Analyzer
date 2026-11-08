@@ -3,6 +3,8 @@
 import json
 import logging
 import os
+import random
+import time
 from typing import Any, List, Optional
 
 from risk_agent.config import DEFAULT_CONFIG
@@ -80,11 +82,33 @@ class LLMExtractor:
                 temperature=self.temperature,
             )
 
-            response = client.models.generate_content(
-                model=self.model_name,
-                contents=user_content,
-                config=config,
-            )
+            max_retries = 5
+            response = None
+            for attempt in range(max_retries):
+                try:
+                    response = client.models.generate_content(
+                        model=self.model_name,
+                        contents=user_content,
+                        config=config,
+                    )
+                    break
+                except Exception as exc:
+                    exc_str = str(exc)
+                    if (
+                        "429" in exc_str
+                        or "RESOURCE_EXHAUSTED" in exc_str
+                        or "rate limit" in exc_str.lower()
+                    ) and attempt < max_retries - 1:
+                        backoff = (2 ** attempt) + random.uniform(1.0, 3.0)
+                        logger.warning(
+                            "LLMExtractor rate limited on Vertex AI (429 RESOURCE_EXHAUSTED). Retrying in %.2fs (attempt %d/%d)...",
+                            backoff,
+                            attempt + 1,
+                            max_retries,
+                        )
+                        time.sleep(backoff)
+                    else:
+                        raise
 
             if hasattr(response, "parsed") and response.parsed:
                 if isinstance(response.parsed, ExtractionResponse):

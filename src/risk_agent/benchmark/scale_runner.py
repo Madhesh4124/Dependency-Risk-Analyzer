@@ -12,6 +12,7 @@ Supports:
 import json
 import logging
 import os
+import random
 import sys
 import tempfile
 import time
@@ -159,6 +160,7 @@ class ScaleBenchmarkRunner:
         lat_single_call = 0.0
         if self.use_live_llm and self.single_call_baseline:
             try:
+                time.sleep(random.uniform(0.3, 0.7))
                 t_llm = time.time()
                 resp = self.single_call_baseline.evaluate(
                     package_name=pkg_name,
@@ -192,6 +194,7 @@ class ScaleBenchmarkRunner:
         t_hy = time.time()
         try:
             if self.use_live_llm and self.hybrid_agent:
+                time.sleep(random.uniform(0.3, 0.7))
                 rep = self.hybrid_agent.evaluate_with_sources(
                     sources=repo_snippets,
                     raw_release_notes=raw_release_notes,
