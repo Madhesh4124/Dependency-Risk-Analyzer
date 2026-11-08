@@ -79,9 +79,9 @@ def main():
 
     for sys_key, data in report.get("systems", {}).items():
         name = data["name"][:38]
-        acc = data["metrics"]["exact_accuracy"]["percentage"]
-        fnr = data["metrics"]["false_no_risk_found_rate"]["percentage"]
-        fpr = data["metrics"]["false_alarm_rate"]["percentage"]
+        acc = data["metrics"].get("exact_accuracy", {}).get("percentage", "N/A")
+        fnr = data["metrics"].get("false_no_risk_found_rate", {}).get("percentage", "N/A")
+        fpr = data["metrics"].get("false_alarm_rate", {}).get("percentage", "N/A")
         print(f"{name:<40} | {acc:<12} | {fnr:<16} | {fpr}")
 
     print("=" * 80 + "\n")
