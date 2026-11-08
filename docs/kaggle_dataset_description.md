@@ -2,6 +2,9 @@
 
 **PyRiskBench** is an empirical ground-truth benchmark for evaluating static analysis tools and LLM agents on detecting **breaking changes, silent semantic drift, and prompt injection attacks** in Python dependency updates.
 
+* **Kaggle Dataset:** [kaggle.com/datasets/madheshraj/python-dependency-upgrade-risk-benchmark](https://www.kaggle.com/datasets/madheshraj/python-dependency-upgrade-risk-benchmark)
+* **GitHub Repository:** [github.com/Madhesh4124/Dependency-Risk-Analyzer](https://github.com/Madhesh4124/Dependency-Risk-Analyzer)
+
 ---
 
 ## 📁 Dataset Structure
