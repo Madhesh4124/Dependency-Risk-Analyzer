@@ -26,6 +26,6 @@ COPY benchmark /app/benchmark
 # Install project package
 RUN uv sync --frozen --no-dev
 
-# Default entrypoint for Cloud Run Jobs parallel sharding
+# Default entrypoint for Cloud Run Jobs parallel sharding with live Gemini calls
 ENTRYPOINT ["python", "benchmark/scale_harness.py"]
-CMD ["--concurrency", "4"]
+CMD ["--use-live-llm", "--concurrency", "4"]
