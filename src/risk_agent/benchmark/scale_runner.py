@@ -192,20 +192,16 @@ class ScaleBenchmarkRunner:
         t_hy = time.time()
         try:
             if self.use_live_llm and self.hybrid_agent:
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    tmp_p = Path(tmp_dir)
-                    for fn, fc in repo_snippets.items():
-                        (tmp_p / fn).write_text(fc, encoding="utf-8")
-                    rep = self.hybrid_agent.evaluate_upgrade(
-                        package_name=pkg_name,
-                        old_version=old_ver,
-                        new_version=new_ver,
-                        manifest_diff=manifest_diff,
-                        raw_release_notes=raw_release_notes,
-                        source_url="https://pypi.org/project/" + pkg_name,
-                        repo_dir=tmp_p,
-                    )
-                    v_hybrid = rep.final_verdict
+                rep = self.hybrid_agent.evaluate_with_sources(
+                    sources=repo_snippets,
+                    raw_release_notes=raw_release_notes,
+                    manifest_content=manifest_diff,
+                    package_name=pkg_name,
+                    old_version=old_ver,
+                    new_version=new_ver,
+                    source_url="https://pypi.org/project/" + pkg_name,
+                )
+                v_hybrid = rep.verdict
             else:
                 # Deterministic floor + verified claim check
                 lower_notes = raw_release_notes.lower()
