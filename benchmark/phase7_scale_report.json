@@ -300,44 +300,6 @@
   },
   "results_sample": [
     {
-      "case_id": "TIER-A-03",
-      "package_name": "api-client",
-      "tier": "TIER_A",
-      "bump_type": "MINOR",
-      "ground_truth": "REVIEW",
-      "predictions": {
-        "b1_semver": "NO_RISK_FOUND",
-        "b2_green_ci": "RISKY",
-        "b3_pure_ast": "RISKY",
-        "b4_single_llm": "RISKY",
-        "s5_hybrid_agent": "RISKY"
-      },
-      "latencies_ms": {
-        "b4_single_llm": 0.0,
-        "s5_hybrid_agent": 0.0,
-        "total": 844.65
-      }
-    },
-    {
-      "case_id": "TIER-A-01",
-      "package_name": "data-transformer",
-      "tier": "TIER_A",
-      "bump_type": "MAJOR",
-      "ground_truth": "RISKY",
-      "predictions": {
-        "b1_semver": "RISKY",
-        "b2_green_ci": "RISKY",
-        "b3_pure_ast": "RISKY",
-        "b4_single_llm": "RISKY",
-        "s5_hybrid_agent": "RISKY"
-      },
-      "latencies_ms": {
-        "b4_single_llm": 0.0,
-        "s5_hybrid_agent": 0.0,
-        "total": 846.25
-      }
-    },
-    {
       "case_id": "TIER-A-04",
       "package_name": "text-styler",
       "tier": "TIER_A",
@@ -353,7 +315,26 @@
       "latencies_ms": {
         "b4_single_llm": 0.0,
         "s5_hybrid_agent": 0.0,
-        "total": 797.27
+        "total": 1097.64
+      }
+    },
+    {
+      "case_id": "TIER-A-03",
+      "package_name": "api-client",
+      "tier": "TIER_A",
+      "bump_type": "MINOR",
+      "ground_truth": "REVIEW",
+      "predictions": {
+        "b1_semver": "NO_RISK_FOUND",
+        "b2_green_ci": "RISKY",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "RISKY",
+        "s5_hybrid_agent": "RISKY"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 1102.63
       }
     },
     {
@@ -372,7 +353,26 @@
       "latencies_ms": {
         "b4_single_llm": 0.0,
         "s5_hybrid_agent": 0.0,
-        "total": 851.27
+        "total": 1114.65
+      }
+    },
+    {
+      "case_id": "TIER-A-01",
+      "package_name": "data-transformer",
+      "tier": "TIER_A",
+      "bump_type": "MAJOR",
+      "ground_truth": "RISKY",
+      "predictions": {
+        "b1_semver": "RISKY",
+        "b2_green_ci": "RISKY",
+        "b3_pure_ast": "RISKY",
+        "b4_single_llm": "RISKY",
+        "s5_hybrid_agent": "RISKY"
+      },
+      "latencies_ms": {
+        "b4_single_llm": 0.0,
+        "s5_hybrid_agent": 0.0,
+        "total": 1095.62
       }
     },
     {

@@ -20,7 +20,7 @@ ZIP_PATH = DIST_DIR / "pyriskbench_kaggle.zip"
 def create_metadata(kaggle_dir: Path):
     metadata = {
         "title": "Python Dependency Upgrade Risk Benchmark (PyRiskBench)",
-        "id": "madhesh4124/pyriskbench-dependency-risk",
+        "id": "madheshraj/python-dependency-upgrade-risk-benchmark",
         "licenses": [{"name": "CC0-1.0"}],
         "keywords": [
             "python",

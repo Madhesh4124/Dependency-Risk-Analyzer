@@ -33,7 +33,7 @@ import json
 from pathlib import Path
 
 # 1. Download dataset
-path = Path(kagglehub.dataset_download("madhesh4124/pyriskbench-dependency-risk"))
+path = Path(kagglehub.dataset_download("madheshraj/python-dependency-upgrade-risk-benchmark"))
 
 # 2. Load Tier A fixtures
 with open(path / "tier_a" / "cases.json") as f:

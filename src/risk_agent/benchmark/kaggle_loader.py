@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("risk_agent.benchmark.kaggle_loader")
 
-DEFAULT_KAGGLE_DATASET = "madhesh4124/pyriskbench-dependency-risk"
+DEFAULT_KAGGLE_DATASET = "madheshraj/python-dependency-upgrade-risk-benchmark"
 
 
 def resolve_benchmark_root(dataset_id: Optional[str] = None, force_download: bool = False) -> Path:
