@@ -48,12 +48,10 @@ PROJECT_ID = (
 delivery_store: DeliveryStore = FirestoreDeliveryStore(project_id=PROJECT_ID)
 report_store = FirestoreReportStore(project_id=PROJECT_ID)
 
-# Shared Pipeline & Fetchers
-pipeline = RiskAgentPipeline()
-release_fetcher = ReleaseNoteFetcher()
-
 # Phase 6 Components: Injection Shield, GitHub App Multi-Tenant Auth, PR Commenter & Checks
-injection_detector = InjectionDetector()
+injection_detector = InjectionDetector(project_id=PROJECT_ID)
+pipeline = RiskAgentPipeline(injection_detector=injection_detector)
+release_fetcher = ReleaseNoteFetcher()
 github_app_auth = GitHubAppAuth()
 github_comment_client = GitHubCommentClient()
 github_check_client = GitHubCheckClient()
@@ -68,10 +66,19 @@ async def health_check():
         "service": "dependency-risk-agent",
         "version": "0.1.0",
         "gcp_project": PROJECT_ID,
+        "gcp_region": DEFAULT_CONFIG.gcp_region,
+        "vertex_ai_model": pipeline.extractor.model_name,
+        "vertex_ai_location": pipeline.extractor.location,
         "firestore_dedup_active": getattr(delivery_store, "is_using_firestore", False),
         "firestore_reports_active": getattr(report_store, "is_using_firestore", False),
         "github_app_configured": github_app_auth.is_app_configured,
         "injection_shield_active": True,
+        "model_armor_enabled": injection_detector.enable_model_armor,
+        "model_armor_configured": injection_detector.is_model_armor_configured,
+        "model_armor_location": injection_detector.model_armor_location,
+        "model_armor_template": injection_detector.model_armor_template,
+        "model_armor_fail_closed": injection_detector.fail_closed,
+        "model_armor_scan_model_response": injection_detector.scan_model_response_enabled,
     }
 
 
@@ -297,7 +304,7 @@ async def receive_webhook(
             )
             is_notes_available = False
 
-    # 8.5 Security Tripwire: Scan untrusted PR metadata and release notes
+    # 8.5 Security Tripwire: Google Cloud Model Armor + Local Heuristic Tripwires
     pr_title = pr_data.get("title", "")
     pr_body = pr_data.get("body", "")
     commit_messages = [c.get("message", "") for c in payload.get("commits", []) if isinstance(c, dict)]
@@ -307,16 +314,25 @@ async def receive_webhook(
         release_notes=raw_release_notes,
         commit_messages=commit_messages,
     )
+    if injection_res.model_armor_status == "error":
+        logger.error(
+            "Model Armor ingress inspection failed for PR #%s on %s (%s); fail_closed=%s",
+            pr_number,
+            repo_full_name,
+            injection_res.model_armor_error,
+            injection_detector.fail_closed,
+        )
     if injection_res.detected:
         logger.warning(
-            "Adversarial prompt injection pattern detected in PR #%s on %s: pattern=%s, snippet='%s'",
+            "Adversarial prompt injection pattern detected in PR #%s on %s: pattern=%s, engine=%s, snippet='%s'",
             pr_number,
             repo_full_name,
             injection_res.pattern_type,
+            injection_res.engine,
             injection_res.sanitized_snippet,
         )
 
-    # 9. Execute Pipeline
+    # 9. Execute Pipeline (shares ingress InjectionResult and also runs Model Armor egress check)
     report = pipeline.evaluate_with_sources(
         sources=custom_sources,
         raw_release_notes=raw_release_notes,
@@ -327,7 +343,38 @@ async def receive_webhook(
         is_release_notes_available=is_notes_available,
         source_url=source_url,
         documentation_url=documentation_url,
+        pr_title=pr_title,
+        pr_body=pr_body,
+        commit_messages=commit_messages,
+        injection_result=injection_res,
     )
+
+    if report.injection_detected and not injection_res.detected:
+        from risk_agent.security.injection_detector import InjectionPatternType
+
+        pattern_enum = None
+        if report.injection_pattern:
+            try:
+                pattern_enum = InjectionPatternType(report.injection_pattern)
+            except Exception:
+                pattern_enum = InjectionPatternType.MODEL_ARMOR_FLAGGED
+        injection_res = injection_res.__class__(
+            detected=True,
+            pattern_type=pattern_enum,
+            sanitized_snippet="Flagged during LLM output sanitization",
+            confidence=0.95,
+            engine=report.injection_engine or "model_armor",
+            triggered_filters=list(report.model_armor_triggered_filters),
+            model_armor_status=report.model_armor_status or "matched",
+            model_armor_error=report.model_armor_error,
+        )
+    else:
+        if report.model_armor_status == "matched" or (
+            report.model_armor_status == "error" and injection_res.model_armor_status != "matched"
+        ):
+            injection_res.model_armor_status = report.model_armor_status
+        if report.model_armor_error and not injection_res.model_armor_error:
+            injection_res.model_armor_error = report.model_armor_error
 
     report_id = str(uuid.uuid4())
     report_store.save_report(report_id, report)
@@ -346,6 +393,10 @@ async def receive_webhook(
             "verdict": report.verdict.value,
             "risk_floor": report.risk_floor.value,
             "injection_detected": injection_res.detected,
+            "injection_engine": injection_res.engine,
+            "model_armor_status": report.model_armor_status,
+            "model_armor_error": report.model_armor_error,
+            "model_armor_filters": list(report.model_armor_triggered_filters),
         },
     )
 
@@ -397,6 +448,10 @@ async def receive_webhook(
         "potential_usages_count": len(report.potential_usages),
         "injection_detected": injection_res.detected,
         "injection_pattern": injection_res.pattern_type.value if injection_res.pattern_type else None,
+        "injection_engine": injection_res.engine if injection_res.detected else None,
+        "model_armor_status": report.model_armor_status,
+        "model_armor_error": report.model_armor_error,
+        "model_armor_triggered_filters": list(report.model_armor_triggered_filters),
         "pr_comment_status": comment_action,
         "pr_comment_id": comment_id,
         "check_run_status": check_conclusion,
@@ -437,7 +492,12 @@ class DemoSimulatedLLM:
             if not isinstance(m, SystemMessage):
                 user_content += getattr(m, "content", str(m)) + "\n"
 
-        if "system instructions override" in user_content.lower() or "ignore all previous rules" in user_content.lower():
+        user_lower = user_content.lower()
+        if (
+            "system instructions override" in user_lower
+            or "ignore all previous rules" in user_lower
+            or "[quarantined_adversarial_directive]" in user_lower
+        ):
             # Adversarial prompt injection scenario: model outputs NO_RISK_FOUND suggestion
             return ExtractionResponse(
                 claims=[
@@ -489,16 +549,19 @@ def get_demo_pipeline() -> RiskAgentPipeline:
         or os.getenv("GOOGLE_CLOUD_API_KEY")
         or os.getenv("GEMINI_API_KEY")
     )
-    has_adc = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+    has_adc = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("K_SERVICE"))
 
     if has_api_key or has_adc:
         try:
-            return RiskAgentPipeline()
+            return RiskAgentPipeline(injection_detector=injection_detector)
         except Exception:
             pass
 
     from risk_agent.extraction.extractor import LLMExtractor
-    return RiskAgentPipeline(extractor=LLMExtractor(llm=DemoSimulatedLLM()))
+    return RiskAgentPipeline(
+        extractor=LLMExtractor(llm=DemoSimulatedLLM()),
+        injection_detector=injection_detector,
+    )
 
 
 @app.post("/evaluate/demo", tags=["Demo"])
@@ -610,4 +673,8 @@ async def run_demo_scenario(scenario_name: str):
         "reasons": report.reasons,
         "verified_claims": [c.model_dump() for c in report.verified_claims],
         "potential_usages": [u.model_dump() for u in report.potential_usages],
+        "injection_detected": report.injection_detected,
+        "injection_engine": report.injection_engine,
+        "model_armor_status": report.model_armor_status,
+        "model_armor_triggered_filters": list(report.model_armor_triggered_filters),
     }

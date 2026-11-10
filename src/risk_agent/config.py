@@ -52,8 +52,7 @@ class AgentConfig(BaseModel):
     )
     vertex_ai_location: str = Field(
         default_factory=lambda: (
-            os.getenv("VERTEX_AI_LOCATION")
-            or "global"
+            (os.getenv("VERTEX_AI_LOCATION") or "global").strip() or "global"
         )
     )
     vertex_ai_model: str = Field(
@@ -64,6 +63,52 @@ class AgentConfig(BaseModel):
     )
     llm_temperature: float = 0.0
     prompt_version: str = "v1.0"
+
+    # Google Cloud Model Armor Configuration (Phase 6 Primary Security Shield)
+    enable_model_armor: bool = Field(
+        default_factory=lambda: (
+            os.getenv("ENABLE_MODEL_ARMOR", "true").lower() in ("true", "1", "yes")
+        )
+    )
+    model_armor_location: str = Field(
+        default_factory=lambda: (
+            os.getenv("MODEL_ARMOR_LOCATION")
+            or os.getenv("GCP_REGION")
+            or os.getenv("GOOGLE_CLOUD_REGION")
+            or "asia-south1"
+        )
+    )
+    model_armor_template_id: Optional[str] = Field(
+        default_factory=lambda: os.getenv("MODEL_ARMOR_TEMPLATE_ID", "pr-security-shield") or None
+    )
+    model_armor_template: Optional[str] = Field(
+        default_factory=lambda: os.getenv("MODEL_ARMOR_TEMPLATE") or None
+    )
+    model_armor_max_chunk_chars: int = 8000
+    model_armor_chunk_overlap: int = 500
+    model_armor_scan_model_response: bool = Field(
+        default_factory=lambda: os.getenv("MODEL_ARMOR_SCAN_MODEL_RESPONSE", "true").lower()
+        in ("true", "1", "yes")
+    )
+    model_armor_fail_closed: bool = Field(
+        default_factory=lambda: os.getenv("MODEL_ARMOR_FAIL_CLOSED", "true").lower()
+        in ("true", "1", "yes")
+    )
+    model_armor_enable_multilang: bool = Field(
+        default_factory=lambda: os.getenv("MODEL_ARMOR_ENABLE_MULTILANG", "true").lower()
+        in ("true", "1", "yes")
+    )
+
+    # Phase 7 Benchmark Persistence Configuration (GCS Artifacts + Firestore Index)
+    benchmark_gcs_bucket: Optional[str] = Field(
+        default_factory=lambda: os.getenv("BENCHMARK_GCS_BUCKET") or None
+    )
+    benchmark_gcs_prefix: str = Field(
+        default_factory=lambda: os.getenv("BENCHMARK_GCS_PREFIX", "benchmarks/phase7")
+    )
+    benchmark_firestore_collection: str = Field(
+        default_factory=lambda: os.getenv("BENCHMARK_FIRESTORE_COLLECTION", "benchmark_runs")
+    )
 
 
 DEFAULT_CONFIG = AgentConfig()

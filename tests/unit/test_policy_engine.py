@@ -114,6 +114,30 @@ class TestPolicyEngineFloors:
         )
         assert floor == SeverityVerdict.NO_RISK_FOUND
 
+    def test_prompt_injection_blocks_automatic_no_risk_found(self):
+        floor, reasons = PolicyEngine.evaluate_risk_floor(
+            bump_type=VersionBumpType.PATCH,
+            release_notes_available=True,
+            verified_claims=[],
+            unverified_claims=[],
+            usages=[],
+            injection_detected=True,
+        )
+        assert floor == SeverityVerdict.REVIEW
+        assert any("prompt injection" in r.lower() for r in reasons)
+
+    def test_model_armor_error_forces_review_fail_closed(self):
+        floor, reasons = PolicyEngine.evaluate_risk_floor(
+            bump_type=VersionBumpType.PATCH,
+            release_notes_available=True,
+            verified_claims=[],
+            unverified_claims=[],
+            usages=[],
+            model_armor_error=True,
+        )
+        assert floor == SeverityVerdict.REVIEW
+        assert any("model armor" in r.lower() for r in reasons)
+
 
 class TestVerdictEscalationAndFloorEnforcement:
     def test_policy_cannot_go_down(self):

@@ -1,8 +1,9 @@
 """Evaluation pipelines for Dependency Upgrade Risk Agent (Phase 2 & Phase 3)."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
+from risk_agent.config import DEFAULT_CONFIG
 from risk_agent.extraction.extractor import LLMExtractor
 from risk_agent.extraction.schemas import LLMExtractionResult
 from risk_agent.models.schemas import (
@@ -18,6 +19,7 @@ from risk_agent.parser.diff_parser import ManifestDiffParser, determine_bump_typ
 from risk_agent.policy.policy_engine import PolicyEngine
 from risk_agent.resolver.package_resolver import PackageResolver
 from risk_agent.scanner.ast_scanner import ASTScanner
+from risk_agent.security.injection_detector import InjectionDetector, InjectionResult
 from risk_agent.verifier.quote_verifier import QuoteVerifier
 
 
@@ -112,10 +114,15 @@ class DeterministicPipeline:
 
 
 class RiskAgentPipeline:
-    """Full Phase 3 pipeline integrating LLM extraction, quote verification, AST scanning, and risk floor."""
+    """Full Phase 3-6 pipeline integrating security shield, LLM extraction, quote verification, AST scanning, and risk floor."""
 
-    def __init__(self, extractor: Optional[LLMExtractor] = None):
+    def __init__(
+        self,
+        extractor: Optional[LLMExtractor] = None,
+        injection_detector: Optional[InjectionDetector] = None,
+    ):
         self.extractor = extractor or LLMExtractor()
+        self.injection_detector = injection_detector or InjectionDetector()
         self.quote_verifier = QuoteVerifier()
         self.ast_scanner = ASTScanner()
 
@@ -165,6 +172,10 @@ class RiskAgentPipeline:
         is_release_notes_available: bool = True,
         source_url: Optional[str] = None,
         documentation_url: Optional[str] = None,
+        pr_title: str = "",
+        pr_body: str = "",
+        commit_messages: Optional[Sequence[str]] = None,
+        injection_result: Optional[InjectionResult] = None,
     ) -> RiskReport:
         """Executes the full pipeline against in-memory repository source files."""
         if not package_name:
@@ -187,28 +198,110 @@ class RiskAgentPipeline:
             if bump_type == VersionBumpType.UNKNOWN:
                 bump_type = VersionBumpType.MAJOR
 
+        # Step 1.5: Ingress Security Scan (Google Cloud Model Armor + Local Heuristic Tripwires)
+        active_injection = injection_result
+        if active_injection is None:
+            active_injection = self.injection_detector.scan_pr(
+                pr_title=pr_title,
+                pr_body=pr_body,
+                release_notes=raw_release_notes,
+                commit_messages=commit_messages,
+            )
+
+        llm_input_notes = (
+            self.injection_detector.quarantine_untrusted_text(
+                raw_release_notes,
+                injection_result=active_injection,
+            )
+            if raw_release_notes
+            else ""
+        )
+
         # Step 2: Resolve package to module import names
         resolution = PackageResolver.resolve(package_name)
 
-        # Step 3: LLM Extraction
+        # Step 3: LLM Extraction (receives sanitized/quarantined release notes)
         llm_verdict: Optional[SeverityVerdict] = None
         extracted_claims: List[ExtractedClaim] = []
         model_id = self.extractor.model_name
         prompt_version = self.extractor.prompt_version
+        triggered_filters: List[str] = list(getattr(active_injection, "triggered_filters", []) or [])
+        injection_detected = bool(active_injection and active_injection.detected)
+        injection_pattern = (
+            active_injection.pattern_type.value
+            if (active_injection and active_injection.pattern_type)
+            else None
+        )
+        injection_engine = active_injection.engine if injection_detected else None
 
-        if is_release_notes_available and raw_release_notes.strip():
+        ma_statuses: List[str] = []
+        ma_errors: List[str] = []
+        init_ma_status = getattr(active_injection, "model_armor_status", None)
+        if init_ma_status and init_ma_status != "disabled":
+            ma_statuses.append(init_ma_status)
+        if getattr(active_injection, "model_armor_error", None):
+            ma_errors.append(f"ingress: {active_injection.model_armor_error}")
+
+        if is_release_notes_available and raw_release_notes.strip() and llm_input_notes.strip():
             extraction_res: LLMExtractionResult = self.extractor.extract_claims(
                 package_name=package_name,
                 old_version=old_version,
                 new_version=new_version,
-                release_notes=raw_release_notes,
+                release_notes=llm_input_notes,
             )
             extracted_claims = extraction_res.claims
             llm_verdict = extraction_res.overall_risk
             model_id = extraction_res.model_id
             prompt_version = extraction_res.prompt_version
 
-        # Step 4: Quote Verification
+            # Step 3.5: Egress Model Response Security Check (Model Armor SanitizeModelResponse + Leak Guard)
+            if extraction_res.status == "success":
+                serialized_response = "\n".join(
+                    [extraction_res.summary or ""]
+                    + [
+                        f"{c.affected_api or ''}: {c.description or ''} {c.quoted_text or ''}"
+                        for c in extracted_claims
+                    ]
+                ).strip()
+                should_scan_egress = bool(
+                    serialized_response
+                    and (
+                        (
+                            self.injection_detector.enable_model_armor
+                            and self.injection_detector.scan_model_response_enabled
+                        )
+                        or any(
+                            tok in serialized_response
+                            for tok in ("BEGIN ", "ghp_", "ghs_", "AIza", "GITHUB_TOKEN=", "AWS_SECRET_ACCESS_KEY")
+                        )
+                    )
+                )
+                if should_scan_egress:
+                    egress_res = self.injection_detector.scan_model_response(
+                        response_text=serialized_response,
+                        user_prompt=llm_input_notes[:2000],
+                    )
+                    if egress_res.model_armor_status and egress_res.model_armor_status != "disabled":
+                        ma_statuses.append(egress_res.model_armor_status)
+                    if egress_res.model_armor_error:
+                        ma_errors.append(f"egress: {egress_res.model_armor_error}")
+                    if egress_res.detected:
+                        injection_detected = True
+                        if not injection_pattern and egress_res.pattern_type:
+                            injection_pattern = egress_res.pattern_type.value
+                        if not injection_engine:
+                            injection_engine = egress_res.engine
+                        elif (
+                            egress_res.engine
+                            and egress_res.engine != "none"
+                            and egress_res.engine not in injection_engine
+                        ):
+                            injection_engine = f"{injection_engine}+{egress_res.engine}"
+                        for flt in egress_res.triggered_filters:
+                            if flt not in triggered_filters:
+                                triggered_filters.append(flt)
+
+        # Step 4: Quote Verification (strictly verified against unmodified raw_release_notes)
         verified_claims: List[ExtractedClaim] = []
         unverified_claims: List[ExtractedClaim] = []
 
@@ -237,6 +330,23 @@ class RiskAgentPipeline:
                 )
                 usages.extend(found_usages)
 
+        # Resolve aggregate Model Armor inspection state & fail-closed enforcement
+        overall_ma_error = "; ".join(ma_errors) if ma_errors else None
+        if "matched" in ma_statuses:
+            overall_ma_status = "matched"
+        elif "error" in ma_statuses:
+            overall_ma_status = "error"
+        elif "clean" in ma_statuses:
+            overall_ma_status = "clean"
+        else:
+            overall_ma_status = init_ma_status or (
+                "clean" if self.injection_detector.enable_model_armor else "disabled"
+            )
+
+        ma_fail_closed = bool(
+            self.injection_detector.fail_closed and overall_ma_status == "error"
+        )
+
         # Step 6: Evaluate Deterministic Floor
         floor, reasons = PolicyEngine.evaluate_risk_floor(
             bump_type=bump_type,
@@ -244,6 +354,8 @@ class RiskAgentPipeline:
             verified_claims=verified_claims,
             unverified_claims=unverified_claims,
             usages=usages,
+            injection_detected=injection_detected,
+            model_armor_error=ma_fail_closed,
         )
 
         # Step 7: Combine with LLM verdict (CANNOT LOWER FLOOR)
@@ -274,6 +386,12 @@ class RiskAgentPipeline:
             documentation_url=documentation_url,
             model_id=model_id,
             prompt_version=prompt_version,
+            injection_detected=injection_detected,
+            injection_pattern=injection_pattern,
+            injection_engine=injection_engine,
+            model_armor_status=overall_ma_status,
+            model_armor_error=overall_ma_error,
+            model_armor_triggered_filters=triggered_filters,
         )
 
     def evaluate_upgrade(
@@ -304,4 +422,8 @@ class RiskAgentPipeline:
             new_version=new_version,
             bump_type=bump,
             source_url=source_url or f"https://pypi.org/project/{package_name}",
+            pr_title=kwargs.get("pr_title", ""),
+            pr_body=kwargs.get("pr_body", ""),
+            commit_messages=kwargs.get("commit_messages"),
+            injection_result=kwargs.get("injection_result"),
         )

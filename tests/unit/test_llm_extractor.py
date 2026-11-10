@@ -153,3 +153,56 @@ def test_extractor_handles_exception_gracefully():
     assert result.claims == []
     assert result.overall_risk == SeverityVerdict.REVIEW
     assert "Quota exceeded" in (result.error_message or "")
+
+
+def test_extractor_defaults_to_global_location_even_when_gcp_region_is_regional(monkeypatch):
+    """LLM calls must default to Vertex AI 'global' endpoint even when Cloud Run/Model Armor use a regional GCP_REGION."""
+    monkeypatch.setenv("GCP_REGION", "asia-south1")
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+
+    extractor = LLMExtractor(api_key=None)
+    assert extractor.location == "global"
+
+
+def test_extractor_adc_routes_through_google_genai_with_global_location(monkeypatch):
+    """Without an API key (Cloud Run IAM ADC), LLMExtractor invokes google.genai.Client on vertexai=True, location='global'."""
+    from google import genai
+
+    captured_kwargs = {}
+
+    class _FakeModels:
+        def generate_content(self, model, contents, config):
+            resp = MagicMock()
+            resp.parsed = ExtractionResponse(
+                claims=[],
+                summary="Safe patch update",
+                overall_risk=SeverityVerdict.NO_RISK_FOUND,
+            )
+            return resp
+
+    class _FakeClient:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            self.models = _FakeModels()
+
+    monkeypatch.setenv("GCP_REGION", "asia-south1")
+    monkeypatch.setenv("USE_VERTEX_AI", "true")
+    monkeypatch.delenv("VERTEX_AI_LOCATION", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr("risk_agent.extraction.extractor.get_secret", lambda *a, **kw: None)
+    monkeypatch.setattr(genai, "Client", _FakeClient)
+
+    extractor = LLMExtractor(project_id="dependency-impact-analyzer", api_key=None)
+    res = extractor.extract_claims(
+        package_name="requests",
+        old_version="2.31.0",
+        new_version="2.31.1",
+        release_notes="Minor bugfixes only.",
+    )
+
+    assert res.status == "success"
+    assert captured_kwargs["vertexai"] is True
+    assert captured_kwargs["project"] == "dependency-impact-analyzer"
+    assert captured_kwargs["location"] == "global"

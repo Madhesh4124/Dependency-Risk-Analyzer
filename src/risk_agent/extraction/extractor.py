@@ -39,7 +39,7 @@ class LLMExtractor:
             or os.getenv("VERTEX_AI_LOCATION")
             or getattr(DEFAULT_CONFIG, "vertex_ai_location", "global")
             or "global"
-        )
+        ).strip() or "global"
         self.temperature = temperature if temperature is not None else DEFAULT_CONFIG.llm_temperature
         self.prompt_version = prompt_version
         self.api_key = (
@@ -70,9 +70,8 @@ class LLMExtractor:
                 kwargs["vertexai"] = True
                 if self.project_id:
                     kwargs["project"] = self.project_id
-                target_loc = loc or self.location
-                if target_loc:
-                    kwargs["location"] = target_loc
+                target_loc = loc or self.location or "global"
+                kwargs["location"] = target_loc
 
             client = genai.Client(**kwargs)
             config = types.GenerateContentConfig(
@@ -209,12 +208,9 @@ class LLMExtractor:
             # 1. If an explicit custom LLM or mock is injected (e.g. unit tests), use it
             if self._custom_llm is not None:
                 response = self._invoke_custom_or_langchain_llm(user_content)
-            # 2. If a Google Cloud API key (account-bound auth key) is present, use official Google GenAI
-            elif self.api_key:
-                response = self._invoke_genai_client(user_content)
-            # 3. Otherwise fall back to ChatVertexAI with default ADC
+            # 2. Otherwise use the official Google GenAI SDK (supports Vertex AI IAM ADC on 'global' and API key auth with 429 retry)
             else:
-                response = self._invoke_custom_or_langchain_llm(user_content)
+                response = self._invoke_genai_client(user_content)
 
             extracted_claims: List[ExtractedClaim] = []
             for i, p in enumerate(response.claims, start=1):

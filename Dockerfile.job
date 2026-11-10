@@ -17,6 +17,15 @@ ENV GCP_PROJECT_ID=dependency-impact-analyzer
 ENV GCP_REGION=asia-south1
 ENV VERTEX_AI_LOCATION=global
 ENV VERTEX_AI_MODEL=gemini-3.1-flash-lite
+ENV VERTEX_AI_FALLBACK_MODEL=gemini-2.5-flash
+ENV ENABLE_MODEL_ARMOR=true
+ENV MODEL_ARMOR_LOCATION=asia-south1
+ENV MODEL_ARMOR_TEMPLATE_ID=pr-security-shield
+ENV MODEL_ARMOR_SCAN_MODEL_RESPONSE=true
+ENV MODEL_ARMOR_FAIL_CLOSED=true
+ENV MODEL_ARMOR_ENABLE_MULTILANG=true
+ENV BENCHMARK_GCS_PREFIX=benchmarks/phase7
+ENV BENCHMARK_FIRESTORE_COLLECTION=benchmark_runs
 
 # Copy package configurations
 COPY pyproject.toml uv.lock README.md /app/
@@ -31,6 +40,6 @@ COPY benchmark /app/benchmark
 # Install project package
 RUN uv sync --frozen --no-dev
 
-# Default entrypoint for Cloud Run Jobs parallel sharding with live Gemini calls
+# Default entrypoint for Cloud Run Jobs parallel sharding (live Vertex AI + Model Armor -> GCS + Firestore)
 ENTRYPOINT ["python", "benchmark/scale_harness.py"]
-CMD ["--use-live-llm", "--concurrency", "4"]
+CMD ["--concurrency", "4"]

@@ -115,4 +115,10 @@ class RiskReport(BaseModel):
     documentation_url: Optional[str] = None
     model_id: Optional[str] = None
     prompt_version: Optional[str] = None
+    injection_detected: bool = False
+    injection_pattern: Optional[str] = None
+    injection_engine: Optional[str] = None
+    model_armor_status: Optional[str] = None
+    model_armor_error: Optional[str] = None
+    model_armor_triggered_filters: List[str] = Field(default_factory=list)
     timestamp: str = Field(default_factory=utc_now_iso)

@@ -42,6 +42,8 @@ class PolicyEngine:
         verified_claims: List[ExtractedClaim],
         unverified_claims: List[ExtractedClaim],
         usages: List[UsageMatch],
+        injection_detected: bool = False,
+        model_armor_error: bool = False,
     ) -> Tuple[SeverityVerdict, List[str]]:
         """Evaluates the strict deterministic risk floor based on physical evidence."""
         reasons: List[str] = []
@@ -94,6 +96,20 @@ class PolicyEngine:
             floor = escalate(floor, SeverityVerdict.REVIEW)
             reasons.append(
                 f"Contains {len(unverified_claims)} release claim(s) that could not be verified in source notes"
+            )
+
+        # Floor Rule 7: Adversarial prompt injection or unsafe model output cannot auto-approve
+        if injection_detected:
+            floor = escalate(floor, SeverityVerdict.REVIEW)
+            reasons.append(
+                "Adversarial prompt injection detected and quarantined; automatic NO_RISK_FOUND approval blocked by security floor"
+            )
+
+        # Floor Rule 8: Fail-closed Model Armor enforcement (cannot auto-approve when Model Armor fails)
+        if model_armor_error:
+            floor = escalate(floor, SeverityVerdict.REVIEW)
+            reasons.append(
+                "Google Cloud Model Armor inspection failed or was unavailable; automatic NO_RISK_FOUND approval blocked by strict security policy"
             )
 
         # Default clean pass reason

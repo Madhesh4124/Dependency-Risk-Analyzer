@@ -36,6 +36,15 @@ def test_health_check_endpoint(client):
     assert data["service"] == "dependency-risk-agent"
     assert data["version"] == "0.1.0"
     assert "gcp_project" in data
+    assert data["gcp_region"] == "asia-south1"
+    assert data["vertex_ai_location"] == "global"
+    assert "vertex_ai_model" in data
+    assert data["injection_shield_active"] is True
+    assert data["model_armor_enabled"] is True
+    assert data["model_armor_configured"] is True
+    assert data["model_armor_fail_closed"] is True
+    assert data["model_armor_scan_model_response"] is True
+    assert "model_armor_location" in data
 
 
 def test_webhook_header_validation_errors(client):
@@ -157,6 +166,7 @@ def test_phase5_demo_scenarios_via_api(client, scenario_name, expected_verdict):
 
     assert data["verdict"] == expected_verdict
     assert data["matches_expected"] is True
+    assert "model_armor_status" in data
 
     # Check report was archived and can be retrieved via /reports/{id}
     report_id = data["report_id"]
@@ -164,3 +174,21 @@ def test_phase5_demo_scenarios_via_api(client, scenario_name, expected_verdict):
     assert rep_resp.status_code == 200
     archived = rep_resp.json()
     assert archived["verdict"] == expected_verdict
+
+
+def test_phase5_demo_fail_closed_on_model_armor_error(monkeypatch, client):
+    """Verifies webhook demo fails closed to REVIEW when Model Armor errors."""
+    import importlib
+    from unittest.mock import MagicMock
+
+    app_mod = importlib.import_module("risk_agent.webhook.app")
+    failing_ma = MagicMock()
+    failing_ma.sanitize_user_prompt.side_effect = RuntimeError("Model Armor endpoint error")
+    monkeypatch.setattr(app_mod.injection_detector, "_client", failing_ma)
+
+    resp = client.post("/evaluate/demo?scenario_name=scenario_1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["model_armor_status"] == "error"
+    assert data["risk_floor"] == "REVIEW"
+    assert data["verdict"] == "REVIEW"

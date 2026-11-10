@@ -55,15 +55,24 @@ def format_pr_comment(
     if injection_result and injection_result.detected:
         pattern_str = injection_result.pattern_type.value if injection_result.pattern_type else "ADVERSARIAL_INJECTION"
         snippet_str = injection_result.sanitized_snippet or "N/A"
-        lines.extend([
+        engine_str = getattr(injection_result, "engine", "local_heuristic") or "local_heuristic"
+        filters = getattr(injection_result, "triggered_filters", []) or []
+        filter_line = f"> - **Triggered Security Filters:** `{', '.join(filters)}`" if filters else None
+        banner_lines = [
             "> [!WARNING]",
             "> ### Security Tripwire: Adversarial Prompt Injection Detected & Quarantined",
             "> **An adversarial prompt injection attempt was detected in this pull request and was safely defused.**",
+            f"> - **Detection Engine:** `{engine_str}`",
             f"> - **Pattern Detected:** `{pattern_str}`",
             f"> - **Defanged Excerpt:** `{snippet_str}`",
+        ]
+        if filter_line:
+            banner_lines.append(filter_line)
+        banner_lines.extend([
             "> - **Protection Applied:** The untrusted input was isolated. The policy engine evaluated this PR strictly via deterministic static AST analysis and verified upstream release notes.",
             "",
         ])
+        lines.extend(banner_lines)
 
     # 3. Upgrade Summary Table
     bump_type_str = report.bump_type.value if hasattr(report.bump_type, "value") else str(report.bump_type)
@@ -140,6 +149,7 @@ def format_pr_comment(
         f"- **GitHub Delivery ID:** `{delivery_id or 'N/A'}`",
         f"- **Evaluation Model:** `{report.model_id or 'Vertex AI Gemini'}`",
         f"- **Prompt Template:** `{report.prompt_version or 'v1.0'}`",
+        f"- **Security Shield (Model Armor):** `{report.model_armor_status or 'not_run'}`",
         f"- **Execution Latency:** `{latency_str}`",
         "</details>",
         "",

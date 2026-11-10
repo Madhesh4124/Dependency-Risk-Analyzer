@@ -20,6 +20,18 @@ ENV PORT=8080
 ENV HOME=/app
 ENV UV_CACHE_DIR=/app/.cache/uv
 ENV PATH="/app/.venv/bin:$PATH"
+ENV GCP_PROJECT_ID=dependency-impact-analyzer
+ENV GCP_REGION=asia-south1
+ENV VERTEX_AI_LOCATION=global
+ENV VERTEX_AI_MODEL=gemini-3.1-flash-lite
+ENV VERTEX_AI_FALLBACK_MODEL=gemini-2.5-flash
+ENV USE_VERTEX_AI=true
+ENV ENABLE_MODEL_ARMOR=true
+ENV MODEL_ARMOR_LOCATION=asia-south1
+ENV MODEL_ARMOR_TEMPLATE_ID=pr-security-shield
+ENV MODEL_ARMOR_SCAN_MODEL_RESPONSE=true
+ENV MODEL_ARMOR_FAIL_CLOSED=true
+ENV MODEL_ARMOR_ENABLE_MULTILANG=true
 
 # Security: Create non-root system user with /app as home
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup --home /app appuser

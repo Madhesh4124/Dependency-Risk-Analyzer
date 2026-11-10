@@ -6,17 +6,18 @@ Computes:
 - False NO_RISK_FOUND Rate (Catastrophic supply chain miss)
 - False Alarm Rate (False Positive Rate)
 - 95% Confidence Intervals via Wilson Score Interval
-- Latency percentiles (p50, p90, p95)
-- Stratification by bump type (MAJOR, MINOR, PATCH) and package ecosystem
+- Latency percentiles (p50_ms, p90_ms, p95_ms)
+- Distribution breakdowns and abstention rates
 """
 
+from collections import Counter
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 
 def wilson_score_interval(successes: int, total: int, confidence: float = 0.95) -> Dict[str, float]:
     """Calculates Wilson score confidence interval for a binomial proportion.
-    
+
     Robust for small sample sizes and proportions near 0 or 1.
     """
     if total == 0:
@@ -43,23 +44,28 @@ def wilson_score_interval(successes: int, total: int, confidence: float = 0.95) 
 
 def compute_binary_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, Any]:
     """Computes binary classification metrics where Positive = RISKY, Negative = NO_RISK_FOUND.
-    
-    REVIEW is treated as a guarded warning (non-negative).
+
+    REVIEW is treated as a guarded warning (non-negative). Exact-match accuracy counts
+    full label agreement across all evaluated labels (including REVIEW).
     """
     total = len(y_true)
     if total == 0:
         return {}
 
     tp = 0  # True RISKY predicted RISKY or REVIEW
-    fn = 0  # True RISKY predicted NO_RISK_FOUND (Catastrophic miss!)
+    fn = 0  # True RISKY predicted NO_RISK_FOUND (Catastrophic miss)
     tn = 0  # True NO_RISK_FOUND predicted NO_RISK_FOUND
-    fp = 0  # True NO_RISK_FOUND predicted RISKY (False alarm)
+    fp = 0  # True NO_RISK_FOUND predicted RISKY or REVIEW (False alarm)
 
     exact_matches = 0
+    gt_counter: Counter[str] = Counter()
+    pred_counter: Counter[str] = Counter()
 
     for yt, yp in zip(y_true, y_pred):
-        yt_norm = yt.upper()
-        yp_norm = yp.upper()
+        yt_norm = (yt or "UNKNOWN").upper()
+        yp_norm = (yp or "UNKNOWN").upper()
+        gt_counter[yt_norm] += 1
+        pred_counter[yp_norm] += 1
 
         if yt_norm == yp_norm:
             exact_matches += 1
@@ -76,7 +82,7 @@ def compute_binary_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, An
                 fp += 1
 
     accuracy_ci = wilson_score_interval(exact_matches, total)
-    
+
     # False Negative Rate (False NO_RISK_FOUND rate on truly risky bumps)
     risky_total = tp + fn
     fnr_ci = wilson_score_interval(fn, risky_total) if risky_total > 0 else {"proportion": 0.0, "lower": 0.0, "upper": 0.0}
@@ -89,8 +95,14 @@ def compute_binary_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, An
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
+    binary_evaluable = risky_total + benign_total
+    review_predicted = pred_counter.get("REVIEW", 0)
+    rev_ci = wilson_score_interval(review_predicted, total)
+
     return {
         "total_evaluated": total,
+        "binary_evaluable_count": binary_evaluable,
+        "non_binary_ground_truth_count": total - binary_evaluable,
         "exact_accuracy": {
             "count": f"{exact_matches}/{total}",
             "percentage": f"{accuracy_ci['proportion'] * 100:.1f}%",
@@ -106,6 +118,11 @@ def compute_binary_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, An
             "percentage": f"{fpr_ci['proportion'] * 100:.1f}%",
             "ci_95": [fpr_ci["lower"], fpr_ci["upper"]],
         },
+        "review_abstention_rate": {
+            "count": f"{review_predicted}/{total}",
+            "percentage": f"{rev_ci['proportion'] * 100:.1f}%",
+            "ci_95": [rev_ci["lower"], rev_ci["upper"]],
+        },
         "confusion_matrix": {
             "tp": tp,
             "fn": fn,
@@ -115,13 +132,15 @@ def compute_binary_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, An
         "precision": round(precision, 4),
         "recall": round(recall, 4),
         "f1_score": round(f1, 4),
+        "ground_truth_distribution": dict(sorted(gt_counter.items())),
+        "prediction_distribution": dict(sorted(pred_counter.items())),
     }
 
 
 def compute_latency_distribution(latencies_ms: List[float]) -> Dict[str, float]:
-    """Calculates latency statistics across benchmark runs."""
+    """Calculates latency statistics in milliseconds across benchmark runs."""
     if not latencies_ms:
-        return {"p50": 0.0, "p90": 0.0, "p95": 0.0, "mean": 0.0, "min": 0.0, "max": 0.0}
+        return {"p50_ms": 0.0, "p90_ms": 0.0, "p95_ms": 0.0, "mean_ms": 0.0, "min_ms": 0.0, "max_ms": 0.0}
 
     sorted_lat = sorted(latencies_ms)
     n = len(sorted_lat)

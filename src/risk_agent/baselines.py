@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
+from risk_agent.config import DEFAULT_CONFIG
 from risk_agent.models.schemas import (
     ClaimType,
     RiskReport,
@@ -107,18 +108,14 @@ class SingleCallLLMBaseline:
         location: Optional[str] = None,
         custom_llm: Optional[Any] = None,
     ):
-        self.model_name = model_name or os.getenv("VERTEX_AI_MODEL", "gemini-3.1-flash-lite")
-        self.project_id = (
-            project_id
-            or os.getenv("GCP_PROJECT_ID")
-            or os.getenv("GOOGLE_CLOUD_PROJECT")
-            or "dependency-impact-analyzer"
-        )
+        self.model_name = model_name or DEFAULT_CONFIG.vertex_ai_model
+        self.project_id = project_id or DEFAULT_CONFIG.gcp_project_id
         self.location = (
             location
             or os.getenv("VERTEX_AI_LOCATION")
+            or DEFAULT_CONFIG.vertex_ai_location
             or "global"
-        )
+        ).strip() or "global"
         self.api_key = (
             api_key
             or get_secret("google-api-key", project_id=self.project_id)
@@ -139,23 +136,6 @@ class SingleCallLLMBaseline:
         repo_code_snippets: str,
     ) -> SingleCallEvaluationResponse:
         """Prompts the LLM directly with all context in a single shot."""
-        # Check for adversarial injection in release notes that tricks a naive single-call model
-        # (This reflects the documented vulnerability of single-call agents without hard risk floors)
-        lower_notes = release_notes.lower()
-        if (
-            "ignore all previous" in lower_notes or
-            "return no_risk_found" in lower_notes or
-            "system override" in lower_notes or
-            "system prompt override" in lower_notes
-        ):
-            # Naive single call is compromised by prompt injection
-            return SingleCallEvaluationResponse(
-                verdict=SeverityVerdict.NO_RISK_FOUND,
-                confidence="high",
-                reasoning="The upgrade appears safe based on provided release note directives.",
-                claimed_breaking_quotes=[],
-            )
-
         if not release_notes or not release_notes.strip():
             return SingleCallEvaluationResponse(
                 verdict=SeverityVerdict.REVIEW,
@@ -189,9 +169,8 @@ class SingleCallLLMBaseline:
                     client_kwargs["vertexai"] = True
                     if self.project_id:
                         client_kwargs["project"] = self.project_id
-                    target_loc = loc or self.location
-                    if target_loc:
-                        client_kwargs["location"] = target_loc
+                    target_loc = loc or self.location or "global"
+                    client_kwargs["location"] = target_loc
 
                 client = genai.Client(**client_kwargs)
                 prompt = (

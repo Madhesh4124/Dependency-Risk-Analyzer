@@ -1,6 +1,10 @@
 """Prompts and prompt injection defense templates for LLM extraction (Phase 3)."""
 
+import re
+
 PROMPT_VERSION = "v1.0"
+
+_CLOSE_TAG_RE = re.compile(r"</\s*RELEASE_NOTES_DATA\s*>", re.IGNORECASE)
 
 SYSTEM_PROMPT = """You are an expert static analysis assistant analyzing dependency release notes for breaking changes and deprecations.
 
@@ -29,13 +33,14 @@ def format_user_prompt(
     release_notes: str,
 ) -> str:
     """Formats the extraction prompt with explicit data boundaries."""
+    escaped_notes = _CLOSE_TAG_RE.sub("[ESCAPED_CLOSE_RELEASE_NOTES_DATA]", release_notes.strip())
     return f"""Dependency Upgrade Details:
 - Package: {package_name}
 - Old Version: {old_version}
 - New Version: {new_version}
 
 <RELEASE_NOTES_DATA>
-{release_notes.strip()}
+{escaped_notes}
 </RELEASE_NOTES_DATA>
 
 Analyze the content inside <RELEASE_NOTES_DATA> above and extract all breaking changes, deprecations, and API alterations according to the schema."""
