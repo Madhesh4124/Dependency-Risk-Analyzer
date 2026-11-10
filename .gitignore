@@ -41,11 +41,16 @@ scratch/
 .agent/
 .agent
 
-# Study Guides, Label Protocols & Internal Deployment Guides
+# Study Guides, Label Protocols & Internal Guides
 docs/study_guide*
 docs/label_protocol.md
 docs/guides/
+docs/*.md
 infra/**/guide.md
+infra/**/README.md
+**/*_guide.md
+**/*study*.md
+**/guide.md
 *.study.*
 
 # Benchmark Datasets (held private for research release)
