@@ -487,8 +487,12 @@ def test_benchmark_storage_gcs_and_firestore_size_guard():
     # Verify shard merge from GCS produces combined report + Firestore COMPLETED summary
     merged, merge_status = storage.merge_run_from_gcs("run-123", expected_tasks=2)
     assert merged["cases_evaluated"] == 50
+    assert merged["benchmark_phase"] == "phase_7"
+    assert merged["generated_at"]
+    assert merged["runtime_config"]["model_armor_enabled"] is True
     assert merge_status["gcs_report_uri"] == "gs://demo-benchmarks/benchmarks/phase7/run-123/report.json"
     assert merge_status["gcs_latest_uri"] == "gs://demo-benchmarks/benchmarks/phase7/latest.json"
+    assert merge_status["is_partial"] is False
     fs_parent = firestore_docs["benchmark_runs/run-123"]
     assert fs_parent["status"] == "COMPLETED"
     assert "TIER_A" in fs_parent["tier_stratification"]

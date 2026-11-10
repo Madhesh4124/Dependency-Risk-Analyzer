@@ -43,5 +43,6 @@ COPY benchmark /app/benchmark
 RUN uv sync --frozen --no-dev
 
 # Default entrypoint for Cloud Run Jobs parallel sharding (live Vertex AI + Model Armor -> GCS + Firestore)
+# Task 0 waits up to 600s for sibling shards and merges them automatically into GCS report.json + latest.json
 ENTRYPOINT ["python", "benchmark/scale_harness.py"]
-CMD ["--concurrency", "4"]
+CMD ["--concurrency", "4", "--wait-for-shards-seconds", "600"]

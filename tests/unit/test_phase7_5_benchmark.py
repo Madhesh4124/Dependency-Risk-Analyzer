@@ -274,12 +274,37 @@ def test_phase7_5_runner_sharding_lift_and_gcs_firestore_persistence(tmp_path):
 
     merged_gcs, merge_status = storage.merge_run_from_gcs("p75-run-1", expected_tasks=2)
     assert merged_gcs["cases_evaluated"] == 7
+    assert merged_gcs["benchmark_phase"] == "phase_7_5"
+    assert merged_gcs["generated_at"]
+    assert merged_gcs["runtime_config"]["model_armor_enabled"] is True
     assert merge_status["gcs_report_uri"] == "gs://demo-benchmarks/benchmarks/phase7_5/p75-run-1/report.json"
+    assert merge_status["gcs_latest_uri"] == "gs://demo-benchmarks/benchmarks/phase7_5/latest.json"
+    assert merge_status["is_partial"] is False
     fs_doc = firestore_docs["phase7_5_injection_runs/p75-run-1"]
     assert fs_doc["benchmark_phase"] == "phase_7_5"
     assert fs_doc["status"] == "COMPLETED"
     assert "case_results" not in fs_doc
     assert "model_armor_lift" in fs_doc
+
+    # Verify partial-shard guard never overwrites latest.json or writes partial auto-merge
+    storage.save_report(s0, run_id="p75-incomplete")
+    auto_res, auto_st = storage.merge_run_from_gcs(
+        "p75-incomplete", expected_tasks=2, wait_seconds=1, poll_interval_seconds=0
+    )
+    assert auto_res is None
+    assert auto_st["shards_available"] == 1
+    assert auto_st["expected_tasks"] == 2
+    assert "benchmarks/phase7_5/p75-incomplete/report.json" not in uploaded_blobs
+
+    # Manual --merge-shards (wait_seconds=0) with missing shard flags PARTIAL and skips latest.json
+    uploaded_blobs["benchmarks/phase7_5/latest.json"] = '{"sentinel": "keep"}'
+    part_res, part_st = storage.merge_run_from_gcs("p75-incomplete", expected_tasks=2, wait_seconds=0)
+    assert part_res["is_partial"] is True
+    assert part_res["missing_shard_indices"] == [1]
+    assert part_st["is_partial"] is True
+    assert part_st["gcs_latest_uri"] is None
+    assert uploaded_blobs["benchmarks/phase7_5/latest.json"] == '{"sentinel": "keep"}'
+    assert firestore_docs["phase7_5_injection_runs/p75-incomplete"]["status"] == "PARTIAL"
 
     # Verify <900 KB Firestore byte cap pruning for Phase 7.5 reports
     oversized = dict(merged_gcs)

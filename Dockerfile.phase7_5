@@ -46,4 +46,4 @@ COPY benchmark/phase7_5_harness.py /app/benchmark/phase7_5_harness.py
 RUN uv sync --frozen --no-dev
 
 ENTRYPOINT ["python", "benchmark/phase7_5_harness.py"]
-CMD ["--concurrency", "2", "--request-delay-ms", "350"]
+CMD ["--concurrency", "2", "--request-delay-ms", "350", "--wait-for-shards-seconds", "600"]

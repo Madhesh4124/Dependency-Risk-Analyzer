@@ -214,15 +214,24 @@ def main() -> None:
         raise RuntimeError(f"Cloud persistence errors for run_id={run_id}: {cloud_status['errors']}")
 
     if task_count > 1 and task_index == 0 and args.wait_for_shards_seconds > 0:
-        logger.info("Task 0 attempting automatic Phase 7.5 shard merge...")
+        logger.info("Task 0 attempting automatic Phase 7.5 shard merge (wait=%ds)...", args.wait_for_shards_seconds)
         merged_report, merge_status = storage.merge_run_from_gcs(
             run_id=run_id,
             expected_tasks=task_count,
             wait_seconds=args.wait_for_shards_seconds,
         )
         if merged_report is not None:
+            if merge_status.get("errors"):
+                raise RuntimeError(
+                    f"Phase 7.5 merged report persistence errors for run_id={run_id}: {merge_status['errors']}"
+                )
             report = merged_report
             cloud_status = merge_status
+        else:
+            logger.warning(
+                "Task 0 auto-merge deferred (%s). Shards are saved in GCS; run --merge-shards after remaining tasks complete.",
+                merge_status.get("errors"),
+            )
 
     print_phase7_5_summary(report, cloud_status)
 

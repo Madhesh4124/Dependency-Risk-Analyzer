@@ -214,8 +214,17 @@ def main():
             wait_seconds=args.wait_for_shards_seconds,
         )
         if merged_report is not None:
+            if merge_status.get("errors"):
+                raise RuntimeError(
+                    f"Merged report cloud persistence errors for run_id={run_id}: {merge_status['errors']}"
+                )
             report = merged_report
             cloud_status = merge_status
+        else:
+            logger.warning(
+                "Task 0 auto-merge deferred (%s). Shards are saved in GCS; run --merge-shards after remaining tasks complete.",
+                merge_status.get("errors"),
+            )
 
     print_report_summary(report, cloud_status)
 

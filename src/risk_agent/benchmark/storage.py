@@ -63,12 +63,15 @@ def build_firestore_summary(
             "run_id": run_id,
             "benchmark_phase": "phase_7_5",
             "dataset": report.get("dataset", "prodnull/cloneguard (Apache-2.0)"),
+            "generated_at": report.get("generated_at"),
             "saved_at": datetime.now(timezone.utc).isoformat(),
             "is_shard": is_shard,
+            "is_partial": bool(report.get("is_partial", False)),
             "task_index": report.get("task_index", 0),
             "task_count": report.get("task_count", 1),
             "execution_mode": report.get("execution_mode", "unspecified"),
             "request_delay_ms": report.get("request_delay_ms", 0),
+            "runtime_config": report.get("runtime_config", {}),
             "cases_evaluated": report.get("cases_evaluated", 0),
             "core_domain_cases_evaluated": report.get("core_domain_cases_evaluated", 0),
             "injection_cases_count": report.get("injection_cases_count", 0),
@@ -86,11 +89,16 @@ def build_firestore_summary(
     else:
         summary = {
             "run_id": run_id,
+            "benchmark_phase": report.get("benchmark_phase", "phase_7"),
+            "dataset": report.get("dataset", "PyRiskBench (madheshraj/python-dependency-upgrade-risk-benchmark)"),
+            "generated_at": report.get("generated_at"),
             "saved_at": datetime.now(timezone.utc).isoformat(),
             "is_shard": is_shard,
+            "is_partial": bool(report.get("is_partial", False)),
             "task_index": report.get("task_index", 0),
             "task_count": report.get("task_count", 1),
             "execution_mode": report.get("execution_mode", "unspecified"),
+            "runtime_config": report.get("runtime_config", {}),
             "cases_evaluated": report.get("cases_evaluated", 0),
             "eligible_cases_evaluated": report.get("eligible_cases_evaluated", 0),
             "rejected_candidates_count": report.get("rejected_candidates_count", 0),
@@ -106,6 +114,8 @@ def build_firestore_summary(
         }
     if "merged_from_shards" in report:
         summary["merged_from_shards"] = report["merged_from_shards"]
+    if "missing_shard_indices" in report:
+        summary["missing_shard_indices"] = report["missing_shard_indices"]
 
     # Enforce strict <900 KB safety ceiling before sending to Firestore
     encoded_size = len(json.dumps(summary).encode("utf-8"))
@@ -179,6 +189,10 @@ def merge_shard_reports(
     merged["shard_task_indices"] = sorted(
         int(s.get("task_index", 0)) for s in shard_reports
     )
+    runtime_cfgs = [s["runtime_config"] for s in shard_reports if isinstance(s.get("runtime_config"), dict) and s["runtime_config"]]
+    if runtime_cfgs and "runtime_config" not in merged:
+        merged["runtime_config"] = runtime_cfgs[0]
+    merged.setdefault("generated_at", datetime.now(timezone.utc).isoformat())
     if run_id:
         merged["run_id"] = run_id
     return merged
@@ -232,7 +246,7 @@ class BenchmarkStorage:
         bucket = self._gcs_client.bucket(self.gcs_bucket_name)
         blob = bucket.blob(blob_path)
         blob.upload_from_string(
-            json.dumps(payload, indent=2),
+            json.dumps(payload, indent=2, default=str),
             content_type="application/json",
         )
         return f"gs://{self.gcs_bucket_name}/{blob_path}"
@@ -312,7 +326,7 @@ class BenchmarkStorage:
                     run_summary = build_firestore_summary(
                         report, run_id=run_id, gcs_uri=primary_gcs_uri, is_shard=False
                     )
-                    run_summary["status"] = "COMPLETED"
+                    run_summary["status"] = "PARTIAL" if report.get("is_partial") else "COMPLETED"
                     run_ref.set(run_summary)
                     status["firestore_run_doc"] = f"{self.firestore_collection}/{run_id}"
                 logger.info("Saved Firestore benchmark index doc: %s", status["firestore_shard_doc"] or status["firestore_run_doc"])
@@ -346,20 +360,60 @@ class BenchmarkStorage:
         """Collects shard artifacts for `run_id` from GCS, merges them, and persists the final report."""
         deadline = time.time() + max(0, wait_seconds)
         shards = self.list_gcs_shards(run_id)
-        while expected_tasks and len(shards) < expected_tasks and time.time() < deadline:
+        inferred_expected = expected_tasks or (
+            max((int(s.get("task_count", 1)) for s in shards), default=1) if shards else None
+        )
+        while inferred_expected and len(shards) < inferred_expected and time.time() < deadline:
             logger.info(
                 "Waiting for GCS shards for run %s (%d/%d available)...",
                 run_id,
                 len(shards),
-                expected_tasks,
+                inferred_expected,
             )
             time.sleep(poll_interval_seconds)
             shards = self.list_gcs_shards(run_id)
+            if not expected_tasks and shards:
+                inferred_expected = max(int(s.get("task_count", 1)) for s in shards)
 
         if not shards:
             return None, {"run_id": run_id, "errors": [f"No shard JSON blobs found under {self.gcs_prefix}/{run_id}/shards/"]}
 
+        target_count = expected_tasks or max((int(s.get("task_count", 1)) for s in shards), default=1)
+        present_indices = {int(s.get("task_index", 0)) for s in shards}
+        missing_indices = [i for i in range(target_count) if i not in present_indices]
+        is_complete = len(missing_indices) == 0 and len(shards) >= target_count
+
+        if not is_complete and wait_seconds > 0:
+            msg = (
+                f"Timed out waiting for all shards for run {run_id}: "
+                f"{len(shards)}/{target_count} present (missing={missing_indices}). "
+                "Individual shards remain safely stored in GCS; run --merge-shards after remaining tasks finish."
+            )
+            logger.warning(msg)
+            return None, {
+                "run_id": run_id,
+                "errors": [msg],
+                "shards_available": len(shards),
+                "expected_tasks": target_count,
+                "missing_shard_indices": missing_indices,
+            }
+
         merged = merge_shard_reports(shards, run_id=run_id)
-        save_status = self.save_report(merged, run_id=run_id, write_latest=True)
+        if not is_complete:
+            merged["is_partial"] = True
+            merged["expected_tasks"] = target_count
+            merged["missing_shard_indices"] = missing_indices
+            logger.warning(
+                "Merging PARTIAL shard set for %s (%d/%d present, missing=%s); latest.json will not be overwritten.",
+                run_id,
+                len(shards),
+                target_count,
+                missing_indices,
+            )
+
+        save_status = self.save_report(merged, run_id=run_id, write_latest=is_complete)
         save_status["shards_merged"] = len(shards)
+        save_status["is_partial"] = not is_complete
+        if missing_indices:
+            save_status["missing_shard_indices"] = missing_indices
         return merged, save_status

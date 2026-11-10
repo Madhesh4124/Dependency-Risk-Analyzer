@@ -14,6 +14,7 @@ under parallel Cloud Run Job sharding.
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -443,13 +444,25 @@ class Phase75InjectionBenchmarkRunner:
                 else "gcp_cloud_run_model_armor_detection_only"
             )
         )
-        return self.generate_aggregated_report(
+        report = self.generate_aggregated_report(
             results=results,
             task_index=task_index,
             task_count=task_count,
             execution_mode=exec_mode,
             request_delay_ms=int(round(self.request_delay_seconds * 1000)),
         )
+        report["runtime_config"] = {
+            "model_armor_enabled": self.hybrid_detector.enable_model_armor,
+            "model_armor_location": self.hybrid_detector.model_armor_location,
+            "model_armor_template": self.hybrid_detector.model_armor_template,
+            "model_armor_fail_closed": self.hybrid_detector.fail_closed,
+            "model_armor_multilang": self.hybrid_detector.enable_multilang,
+            "include_llm_classifier": self.include_llm_classifier,
+            "vertex_ai_model": self.vertex_ai_model if self.include_llm_classifier else None,
+            "vertex_ai_location": self.vertex_ai_location if self.include_llm_classifier else None,
+            "request_delay_ms": int(round(self.request_delay_seconds * 1000)),
+        }
+        return report
 
     @staticmethod
     def _compute_detectors_block(
@@ -586,6 +599,7 @@ class Phase75InjectionBenchmarkRunner:
         return {
             "benchmark_phase": "phase_7_5",
             "dataset": "prodnull/cloneguard (Apache-2.0)",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "task_index": task_index,
             "task_count": task_count,
             "execution_mode": execution_mode or "gcp_cloud_run_model_armor_detection_only",

@@ -14,6 +14,7 @@ Produces:
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -431,12 +432,24 @@ class ScaleBenchmarkRunner:
             if self._using_injected_doubles
             else "gcp_live_vertex_ai_model_armor"
         )
-        return self.generate_aggregated_report(
+        runtime_config = {
+            "vertex_ai_model": getattr(self.hybrid_agent.extractor, "model_name", None),
+            "vertex_ai_location": getattr(self.hybrid_agent.extractor, "location", None),
+            "baseline4_location": getattr(self.single_call_baseline, "location", None),
+            "model_armor_enabled": self.injection_detector.enable_model_armor,
+            "model_armor_location": self.injection_detector.model_armor_location,
+            "model_armor_template": self.injection_detector.model_armor_template,
+            "model_armor_fail_closed": self.injection_detector.fail_closed,
+            "request_delay_ms": int(round(self.request_delay_seconds * 1000)),
+        }
+        report = self.generate_aggregated_report(
             eval_results,
             task_index,
             task_count,
             execution_mode=execution_mode,
         )
+        report["runtime_config"] = runtime_config
+        return report
 
     @staticmethod
     def _compute_systems_block(subset: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -563,6 +576,9 @@ class ScaleBenchmarkRunner:
         }
 
         report: Dict[str, Any] = {
+            "benchmark_phase": "phase_7",
+            "dataset": "PyRiskBench (madheshraj/python-dependency-upgrade-risk-benchmark)",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "task_index": task_index,
             "task_count": task_count,
             "execution_mode": execution_mode or "gcp_live_vertex_ai_model_armor",
