@@ -506,3 +506,60 @@ def test_benchmark_storage_gcs_and_firestore_size_guard():
     assert guarded.get("payload_pruned_for_firestore_limit") is True
     assert len(json.dumps(guarded).encode("utf-8")) < FIRESTORE_SAFE_LIMIT_BYTES
 
+
+def test_vertex_ai_llm_pacing_and_429_retry_backoff(monkeypatch):
+    """Verifies LLM_REQUEST_DELAY_MS pacing and 429 RESOURCE_EXHAUSTED retries on LLMExtractor & Baseline 4."""
+    import time
+    from google import genai
+    from risk_agent.baselines import SingleCallEvaluationResponse, SingleCallLLMBaseline
+    from risk_agent.extraction.extractor import LLMExtractor
+    from risk_agent.extraction.schemas import ExtractionResponse
+
+    sleeps = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setenv("USE_VERTEX_AI", "true")
+    monkeypatch.setattr("risk_agent.extraction.extractor.get_secret", lambda *a, **kw: None)
+    monkeypatch.setattr("risk_agent.baselines.get_secret", lambda *a, **kw: None)
+
+    ex_calls = {"n": 0}
+    b4_calls = {"n": 0}
+
+    class _FlakyModels:
+        def generate_content(self, model, contents, config):
+            schema = getattr(config, "response_schema", None)
+            if schema is ExtractionResponse:
+                ex_calls["n"] += 1
+                if ex_calls["n"] == 1:
+                    raise RuntimeError("429 RESOURCE_EXHAUSTED")
+                resp = MagicMock()
+                resp.parsed = ExtractionResponse(claims=[], summary="Clean", overall_risk=SeverityVerdict.NO_RISK_FOUND)
+                return resp
+            b4_calls["n"] += 1
+            if b4_calls["n"] == 1:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            resp = MagicMock()
+            resp.parsed = SingleCallEvaluationResponse(verdict=SeverityVerdict.NO_RISK_FOUND, reasoning="Clean")
+            return resp
+
+    class _FakeGenAIClient:
+        def __init__(self, **kwargs):
+            self.models = _FlakyModels()
+
+    monkeypatch.setattr(genai, "Client", _FakeGenAIClient)
+
+    ex = LLMExtractor(project_id="dependency-impact-analyzer", api_key=None, request_delay_seconds=0.5)
+    ex_res = ex.extract_claims("requests", "2.31.0", "2.31.1", "Minor bugfix release.")
+    assert ex_res.status == "success"
+    assert ex_calls["n"] == 2
+    assert len(sleeps) == 2
+    assert sleeps[0] < 1.0
+    assert sleeps[1] >= 2.0
+
+    b4 = SingleCallLLMBaseline(project_id="dependency-impact-analyzer", api_key=None, request_delay_seconds=0.5)
+    b4_res = b4.evaluate("requests", "2.31.0", "2.31.1", "patch", "- a\n+ b", "Minor bugfix.", "import requests")
+    assert b4_res.verdict == SeverityVerdict.NO_RISK_FOUND
+    assert b4_calls["n"] == 2
+    assert len(sleeps) == 4
+    assert sleeps[2] < 1.0
+    assert sleeps[3] >= 2.0
+

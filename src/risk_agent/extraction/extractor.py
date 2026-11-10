@@ -31,6 +31,7 @@ class LLMExtractor:
         prompt_version: str = PROMPT_VERSION,
         api_key: Optional[str] = None,
         llm: Optional[Any] = None,
+        request_delay_seconds: Optional[float] = None,
     ):
         self.model_name = model_name or DEFAULT_CONFIG.vertex_ai_model
         self.project_id = project_id or DEFAULT_CONFIG.gcp_project_id
@@ -49,6 +50,16 @@ class LLMExtractor:
             or os.getenv("GOOGLE_CLOUD_API_KEY")
             or os.getenv("GEMINI_API_KEY")
         )
+        if request_delay_seconds is not None:
+            self.request_delay_seconds = max(0.0, float(request_delay_seconds))
+        else:
+            env_delay = os.getenv("LLM_REQUEST_DELAY_MS")
+            delay_ms = (
+                int(env_delay.strip())
+                if env_delay is not None and env_delay.strip().isdigit()
+                else DEFAULT_CONFIG.llm_request_delay_ms
+            )
+            self.request_delay_seconds = max(0.0, delay_ms / 1000.0)
         self._custom_llm = llm
         self._genai_client = None
         self._langchain_llm = None
@@ -84,6 +95,8 @@ class LLMExtractor:
             max_retries = 5
             response = None
             for attempt in range(max_retries):
+                if attempt == 0 and self.request_delay_seconds > 0:
+                    time.sleep(self.request_delay_seconds * random.uniform(0.85, 1.25))
                 try:
                     response = client.models.generate_content(
                         model=self.model_name,

@@ -52,6 +52,7 @@ infra/**/guide.md
 benchmark/frozen_v1/
 benchmark/tier_a/
 benchmark/tier_b/
+benchmark/external/
 
 # Understand Anything
 .ua/

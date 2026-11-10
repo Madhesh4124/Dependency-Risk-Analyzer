@@ -157,3 +157,70 @@ def compute_latency_distribution(latencies_ms: List[float]) -> Dict[str, float]:
         "min_ms": round(sorted_lat[0], 2),
         "max_ms": round(sorted_lat[-1], 2),
     }
+
+
+def compute_injection_detection_metrics(y_true: List[str], y_pred: List[str]) -> Dict[str, Any]:
+    """Computes binary prompt-injection detection metrics (Positive = INJECTION, Negative = BENIGN).
+
+    Reports exact accuracy, detection recall (TPR), specificity (TNR), false positive rate (FPR),
+    precision, F1-score, and 95% Wilson score confidence intervals.
+    """
+    total = len(y_true)
+    if total == 0:
+        return {}
+
+    tp = fn = tn = fp = 0
+    for yt, yp in zip(y_true, y_pred):
+        yt_pos = (yt or "").upper() == "INJECTION"
+        yp_pos = (yp or "").upper() == "INJECTION"
+        if yt_pos and yp_pos:
+            tp += 1
+        elif yt_pos and not yp_pos:
+            fn += 1
+        elif not yt_pos and not yp_pos:
+            tn += 1
+        else:
+            fp += 1
+
+    inj_total = tp + fn
+    ben_total = tn + fp
+    correct = tp + tn
+
+    acc_ci = wilson_score_interval(correct, total)
+    tpr_ci = wilson_score_interval(tp, inj_total) if inj_total > 0 else {"proportion": 0.0, "lower": 0.0, "upper": 0.0}
+    tnr_ci = wilson_score_interval(tn, ben_total) if ben_total > 0 else {"proportion": 0.0, "lower": 0.0, "upper": 0.0}
+    fpr_ci = wilson_score_interval(fp, ben_total) if ben_total > 0 else {"proportion": 0.0, "lower": 0.0, "upper": 0.0}
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / inj_total if inj_total > 0 else 0.0
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    return {
+        "total_evaluated": total,
+        "injection_count": inj_total,
+        "benign_count": ben_total,
+        "accuracy": {
+            "count": f"{correct}/{total}",
+            "percentage": f"{acc_ci['proportion'] * 100:.1f}%",
+            "ci_95": [acc_ci["lower"], acc_ci["upper"]],
+        },
+        "detection_recall_tpr": {
+            "count": f"{tp}/{inj_total}" if inj_total > 0 else "0/0",
+            "percentage": f"{tpr_ci['proportion'] * 100:.1f}%",
+            "ci_95": [tpr_ci["lower"], tpr_ci["upper"]],
+        },
+        "specificity_tnr": {
+            "count": f"{tn}/{ben_total}" if ben_total > 0 else "0/0",
+            "percentage": f"{tnr_ci['proportion'] * 100:.1f}%",
+            "ci_95": [tnr_ci["lower"], tnr_ci["upper"]],
+        },
+        "false_positive_rate": {
+            "count": f"{fp}/{ben_total}" if ben_total > 0 else "0/0",
+            "percentage": f"{fpr_ci['proportion'] * 100:.1f}%",
+            "ci_95": [fpr_ci["lower"], fpr_ci["upper"]],
+        },
+        "confusion_matrix": {"tp": tp, "fn": fn, "tn": tn, "fp": fp},
+        "precision": round(precision, 4),
+        "recall": round(recall, 4),
+        "f1_score": round(f1, 4),
+    }

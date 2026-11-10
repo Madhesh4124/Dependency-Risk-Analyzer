@@ -18,6 +18,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
+from risk_agent.benchmark.phase7_5_injection_runner import Phase75InjectionBenchmarkRunner
 from risk_agent.benchmark.scale_runner import ScaleBenchmarkRunner
 from risk_agent.config import DEFAULT_CONFIG
 
@@ -54,26 +55,55 @@ def build_firestore_summary(
 
     Strips unbounded `case_results` arrays (which belong in GCS) and enforces a byte-size guard.
     """
-    summary: Dict[str, Any] = {
-        "run_id": run_id,
-        "saved_at": datetime.now(timezone.utc).isoformat(),
-        "is_shard": is_shard,
-        "task_index": report.get("task_index", 0),
-        "task_count": report.get("task_count", 1),
-        "execution_mode": report.get("execution_mode", "unspecified"),
-        "cases_evaluated": report.get("cases_evaluated", 0),
-        "eligible_cases_evaluated": report.get("eligible_cases_evaluated", 0),
-        "rejected_candidates_count": report.get("rejected_candidates_count", 0),
-        "label_provenance_summary": report.get("label_provenance_summary", {}),
-        "model_armor_summary": report.get("model_armor_summary", {}),
-        "systems": report.get("systems", {}),
-        "eligible_only_systems": report.get("eligible_only_systems", {}),
-        "tier_stratification": report.get("tier_stratification", {}),
-        "bump_type_stratification": report.get("bump_type_stratification", {}),
-        "injection_evaluation": report.get("injection_evaluation", {}),
-        "gcs_uri": gcs_uri,
-        "full_report_in_gcs": bool(gcs_uri),
-    }
+    benchmark_phase = report.get("benchmark_phase") or (
+        "phase_7_5" if "detectors" in report else "phase_7"
+    )
+    if benchmark_phase == "phase_7_5":
+        summary: Dict[str, Any] = {
+            "run_id": run_id,
+            "benchmark_phase": "phase_7_5",
+            "dataset": report.get("dataset", "prodnull/cloneguard (Apache-2.0)"),
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "is_shard": is_shard,
+            "task_index": report.get("task_index", 0),
+            "task_count": report.get("task_count", 1),
+            "execution_mode": report.get("execution_mode", "unspecified"),
+            "request_delay_ms": report.get("request_delay_ms", 0),
+            "cases_evaluated": report.get("cases_evaluated", 0),
+            "core_domain_cases_evaluated": report.get("core_domain_cases_evaluated", 0),
+            "injection_cases_count": report.get("injection_cases_count", 0),
+            "benign_cases_count": report.get("benign_cases_count", 0),
+            "detectors": report.get("detectors", {}),
+            "core_domain_detectors": report.get("core_domain_detectors", {}),
+            "model_armor_lift": report.get("model_armor_lift", {}),
+            "split_breakdown": report.get("split_breakdown", {}),
+            "attack_category_breakdown": report.get("attack_category_breakdown", {}),
+            "benign_content_type_breakdown": report.get("benign_content_type_breakdown", {}),
+            "model_armor_summary": report.get("model_armor_summary", {}),
+            "gcs_uri": gcs_uri,
+            "full_report_in_gcs": bool(gcs_uri),
+        }
+    else:
+        summary = {
+            "run_id": run_id,
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "is_shard": is_shard,
+            "task_index": report.get("task_index", 0),
+            "task_count": report.get("task_count", 1),
+            "execution_mode": report.get("execution_mode", "unspecified"),
+            "cases_evaluated": report.get("cases_evaluated", 0),
+            "eligible_cases_evaluated": report.get("eligible_cases_evaluated", 0),
+            "rejected_candidates_count": report.get("rejected_candidates_count", 0),
+            "label_provenance_summary": report.get("label_provenance_summary", {}),
+            "model_armor_summary": report.get("model_armor_summary", {}),
+            "systems": report.get("systems", {}),
+            "eligible_only_systems": report.get("eligible_only_systems", {}),
+            "tier_stratification": report.get("tier_stratification", {}),
+            "bump_type_stratification": report.get("bump_type_stratification", {}),
+            "injection_evaluation": report.get("injection_evaluation", {}),
+            "gcs_uri": gcs_uri,
+            "full_report_in_gcs": bool(gcs_uri),
+        }
     if "merged_from_shards" in report:
         summary["merged_from_shards"] = report["merged_from_shards"]
 
@@ -85,11 +115,17 @@ def build_firestore_summary(
             encoded_size,
             FIRESTORE_SAFE_LIMIT_BYTES,
         )
-        summary.pop("eligible_only_systems", None)
-        summary.pop("bump_type_stratification", None)
+        for optional_key in (
+            "eligible_only_systems",
+            "bump_type_stratification",
+            "benign_content_type_breakdown",
+            "split_breakdown",
+        ):
+            summary.pop(optional_key, None)
         encoded_size = len(json.dumps(summary).encode("utf-8"))
         if encoded_size > FIRESTORE_SAFE_LIMIT_BYTES:
             summary.pop("tier_stratification", None)
+            summary.pop("attack_category_breakdown", None)
         summary["payload_pruned_for_firestore_limit"] = True
 
     return summary
@@ -107,25 +143,38 @@ def merge_shard_reports(
     if not shard_reports:
         raise ValueError("Cannot merge empty shard list")
 
-    deduped_cases: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    modes = set()
-    for shard in shard_reports:
-        if shard.get("execution_mode"):
-            modes.add(shard["execution_mode"])
-        cases = shard.get("case_results") or shard.get("results_sample") or []
-        for c in cases:
-            key = (str(c.get("tier", "")), str(c.get("case_id", "")))
-            deduped_cases[key] = c
-
-    all_cases = list(deduped_cases.values())
+    is_phase7_5 = any(s.get("benchmark_phase") == "phase_7_5" or "detectors" in s for s in shard_reports)
+    modes = {s["execution_mode"] for s in shard_reports if s.get("execution_mode")}
     mode_str = next(iter(modes)) if len(modes) == 1 else "mixed"
 
-    merged = ScaleBenchmarkRunner.generate_aggregated_report(
-        results=all_cases,
-        task_index=0,
-        task_count=1,
-        execution_mode=mode_str,
-    )
+    if is_phase7_5:
+        deduped_p75: Dict[str, Dict[str, Any]] = {}
+        delay_vals = [int(s.get("request_delay_ms", 0)) for s in shard_reports if s.get("request_delay_ms") is not None]
+        for shard in shard_reports:
+            for c in shard.get("case_results") or shard.get("results_sample") or []:
+                deduped_p75[str(c.get("case_id", ""))] = c
+        merged = Phase75InjectionBenchmarkRunner.generate_aggregated_report(
+            results=list(deduped_p75.values()),
+            task_index=0,
+            task_count=1,
+            execution_mode=mode_str,
+            request_delay_ms=max(delay_vals) if delay_vals else 0,
+        )
+    else:
+        deduped_cases: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for shard in shard_reports:
+            cases = shard.get("case_results") or shard.get("results_sample") or []
+            for c in cases:
+                key = (str(c.get("tier", "")), str(c.get("case_id", "")))
+                deduped_cases[key] = c
+
+        all_cases = list(deduped_cases.values())
+        merged = ScaleBenchmarkRunner.generate_aggregated_report(
+            results=all_cases,
+            task_index=0,
+            task_count=1,
+            execution_mode=mode_str,
+        )
     merged["merged_from_shards"] = len(shard_reports)
     merged["shard_task_indices"] = sorted(
         int(s.get("task_index", 0)) for s in shard_reports

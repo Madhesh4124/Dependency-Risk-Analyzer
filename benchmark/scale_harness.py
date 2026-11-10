@@ -112,6 +112,12 @@ def _enforce_cloud_run_execution() -> None:
 def main():
     parser = argparse.ArgumentParser(description="Phase 7 GCP Cloud Run 5-Way Benchmark Runner")
     parser.add_argument("--concurrency", type=int, default=4, help="Worker thread pool concurrency")
+    parser.add_argument(
+        "--request-delay-ms",
+        type=int,
+        default=None,
+        help="Inter-request pacing delay in ms before Vertex AI / Model Armor calls to prevent 429 errors",
+    )
     parser.add_argument("--dataset-dir", type=str, default=None, help="Path to local dataset or cache")
     parser.add_argument("--run-id", type=str, default=None, help="Benchmark run identifier for GCS/Firestore")
     parser.add_argument("--gcs-bucket", type=str, default=None, help="GCS bucket for storing full JSON artifacts")
@@ -173,6 +179,7 @@ def main():
         concurrency=args.concurrency,
         exclude_rejected_candidates=args.exclude_rejected,
         require_gcp=True,
+        request_delay_seconds=(args.request_delay_ms / 1000.0) if args.request_delay_ms is not None else None,
     )
     logger.info(
         "Vertex AI:    model=%s, location=%s (B4=%s)",

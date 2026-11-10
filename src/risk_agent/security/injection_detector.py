@@ -13,13 +13,16 @@ reinforced by defense-in-depth local normalization and deterministic quarantine:
 """
 
 import base64
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 import html
 import logging
 import os
+import random
 import re
-from typing import Any, List, Optional, Sequence, Tuple
+import time
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 import unicodedata
 from urllib.parse import unquote
 
@@ -29,7 +32,74 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATE_RESOURCE_RE = re.compile(r"^projects/([^/]+)/locations/([^/]+)/templates/([^/]+)$")
 _HTML_COMMENT_RE = re.compile(r"<!--(.*?)-->", re.DOTALL)
-_BASE64_CANDIDATE_RE = re.compile(r"\b[A-Za-z0-9+/]{24,}={0,2}\b")
+_BASE64_CANDIDATE_RE = re.compile(
+    r"(?<![A-Za-z0-9+/_-])[A-Za-z0-9+/_-]{20,}={0,2}(?![A-Za-z0-9+/_-])"
+)
+_HEX_CANDIDATE_RE = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{32,}(?![0-9a-fA-F])")
+_HEX_ESCAPE_SEQ_RE = re.compile(r"(?:\\x[0-9a-fA-F]{2}){8,}")
+_UNICODE_ESCAPE_SEQ_RE = re.compile(r"(?:\\u[0-9a-fA-F]{4}){4,}")
+_INVISIBLE_CHARS_RE = re.compile(r"[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF\u00AD]")
+_BIDI_OVERRIDE_RE = re.compile(r"[\u202E\u202D]([^\n]+)")
+
+# Mixed-script Cyrillic & Greek homoglyph skeleton mapping (confusables not folded by NFKC)
+_CONFUSABLE_TRANS = str.maketrans(
+    {
+        "\u0430": "a",  # Cyrillic а
+        "\u0410": "A",  # Cyrillic А
+        "\u0412": "B",  # Cyrillic В
+        "\u0435": "e",  # Cyrillic е
+        "\u0415": "E",  # Cyrillic Е
+        "\u0451": "e",  # Cyrillic ё
+        "\u0401": "E",  # Cyrillic Ё
+        "\u043d": "h",  # Cyrillic н
+        "\u041d": "H",  # Cyrillic Н
+        "\u0456": "i",  # Cyrillic і
+        "\u0406": "I",  # Cyrillic І
+        "\u0457": "i",  # Cyrillic ї
+        "\u0458": "j",  # Cyrillic ј
+        "\u0408": "J",  # Cyrillic Ј
+        "\u043a": "k",  # Cyrillic к
+        "\u041a": "K",  # Cyrillic К
+        "\u043c": "m",  # Cyrillic м
+        "\u041c": "M",  # Cyrillic М
+        "\u043e": "o",  # Cyrillic о
+        "\u041e": "O",  # Cyrillic О
+        "\u0440": "p",  # Cyrillic р
+        "\u0420": "P",  # Cyrillic Р
+        "\u0441": "c",  # Cyrillic с
+        "\u0421": "C",  # Cyrillic С
+        "\u0455": "s",  # Cyrillic ѕ
+        "\u0405": "S",  # Cyrillic Ѕ
+        "\u0442": "t",  # Cyrillic т
+        "\u0422": "T",  # Cyrillic Т
+        "\u0443": "y",  # Cyrillic у
+        "\u0423": "Y",  # Cyrillic У
+        "\u0445": "x",  # Cyrillic х
+        "\u0425": "X",  # Cyrillic Х
+        "\u03b1": "a",  # Greek α
+        "\u0391": "A",  # Greek Α
+        "\u0392": "B",  # Greek Β
+        "\u03b5": "e",  # Greek ε
+        "\u0395": "E",  # Greek Ε
+        "\u0396": "Z",  # Greek Ζ
+        "\u0397": "H",  # Greek Η
+        "\u03b9": "i",  # Greek ι
+        "\u0399": "I",  # Greek Ι
+        "\u03ba": "k",  # Greek κ
+        "\u039a": "K",  # Greek Κ
+        "\u039c": "M",  # Greek Μ
+        "\u039d": "N",  # Greek Ν
+        "\u03bf": "o",  # Greek ο
+        "\u039f": "O",  # Greek Ο
+        "\u03c1": "p",  # Greek ρ
+        "\u03a1": "P",  # Greek Ρ
+        "\u03a4": "T",  # Greek Τ
+        "\u03c5": "u",  # Greek υ
+        "\u03a5": "Y",  # Greek Υ
+        "\u03c7": "x",  # Greek χ
+        "\u03a7": "X",  # Greek Χ
+    }
+)
 
 
 class InjectionPatternType(str, Enum):
@@ -71,8 +141,9 @@ def sanitize_snippet(raw_snippet: str, max_length: int = 100) -> str:
     if not raw_snippet:
         return ""
 
+    cleaned = _INVISIBLE_CHARS_RE.sub("", raw_snippet)
     # Replace newlines and excessive whitespace with a single space
-    cleaned = re.sub(r"\s+", " ", raw_snippet.strip())
+    cleaned = re.sub(r"\s+", " ", cleaned.strip())
     # Defang backticks, brackets, html tags
     cleaned = cleaned.replace("`", "'").replace("<", "&lt;").replace(">", "&gt;")
     cleaned = cleaned.replace("[", "(").replace("]", ")")
@@ -142,25 +213,33 @@ def resolve_model_armor_config(
 # Compiled Regex Rules for Defense-in-Depth Local Heuristic Tripwire
 _PATTERNS = {
     InjectionPatternType.INSTRUCTION_RESET: [
-        re.compile(r"\b(?:ignore|disregard|forget)\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions?|directives?|rules?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:ignore|disregard|forget)\s+(?:all\s+)?(?:previous|prior|earlier|above)\s+(?:instructions?|directives?|rules?|guidelines?|constraints?|policies?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:discard|abandon|set\s+aside|drop)\s+(?:all\s+|your\s+)?(?:previous|prior|earlier|above|established)\s+(?:instructions?|directives?|policies?|rules?|guidelines?|constraints?|training)\b", re.IGNORECASE),
         re.compile(r"\bforget\s+everything\s+(?:above|prior|previously)\b", re.IGNORECASE),
         re.compile(r"\b(?:system\s+(?:prompt\s+|instructions?\s+)?override|new\s+system\s+(?:directive|prompt)|developer\s+mode)\b", re.IGNORECASE),
-        re.compile(r"\b(?:disregard\s+system\s+prompt|reset\s+instructions?|override\s+safety\s+rules?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:disregard\s+system\s+prompt|reset\s+instructions?|override\s+(?:all\s+)?(?:safety|security)\s+(?:rules?|constraints?|policies?)|bypass\s+(?:all\s+)?(?:safety|security)\s+(?:rules?|constraints?|checks?|filters?|restrictions?))\b", re.IGNORECASE),
+        re.compile(r"\bdebug\s+enabled\b.{0,25}\brestrictions?\s+off\b", re.IGNORECASE),
+        re.compile(r"\b(?:reveal|expose|leak)\s+(?:your\s+|the\s+|hidden\s+|complete\s+)?(?:system\s+prompt|hidden\s+guidelines?|system\s+instructions?|initialization\s+prompt)\b", re.IGNORECASE),
     ],
     InjectionPatternType.FORCED_VERDICT_OVERRIDE: [
-        re.compile(r"\b(?:output|return|set|mark|rate|label|classify)\s+(?:(?:this|it)\s+)?(?:as\s+|to\s+|verdict\s+as\s+)?(?:['\"]?)(?:NO_RISK_FOUND|SAFE)(?:['\"]?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:output|return|set|mark|rate|label|classify)\s+(?:(?:this|it|all|everything)\s+)?(?:as\s+|to\s+|verdict\s+as\s+)?(?:['\"]?)(?:NO_RISK_FOUND|SAFE)(?:['\"]?)\b", re.IGNORECASE),
         re.compile(r"\b(?:output|return|set|mark|rate|label)\s+(?:(?:this|it)\s+)?(?:as\s+|to\s+|verdict\s+as\s+)?(?:['\"]?)REVIEW(?:['\"]?)\b", re.IGNORECASE),
         re.compile(r"\bverdict\s*[:=]\s*['\"]?(?:NO_RISK_FOUND|SAFE)['\"]?\b", re.IGNORECASE),
         re.compile(r'"overall_risk"\s*:\s*"NO_RISK_FOUND"', re.IGNORECASE),
-        re.compile(r"\bdo\s+not\s+(?:flag|report|raise)\s+(?:any\s+)?(?:risks?|breaking\s+changes?|alerts?)\b", re.IGNORECASE),
+        re.compile(r"\bdo\s+not\s+(?:flag|raise)\s+(?:any\s+)?(?:security\s+|breaking\s+)?(?:risks?|breaking\s+changes?|alerts?|warnings?)\b", re.IGNORECASE),
+        re.compile(r"\bdo\s+not\s+report\s+(?:any\s+)?(?:breaking\s+changes?|risks?|alerts?|false\s+positives?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:add\s+all\s+to\s+allowlist|skip\s+tier\s+\d+|scanner\s+mark\s+(?:all\s+)?safe)\b", re.IGNORECASE),
     ],
     InjectionPatternType.SECRET_EXFILTRATION: [
-        re.compile(r"\b(?:print|dump|output|leak|reveal|echo|exfiltrate)\s+(?:all\s+)?(?:env|environment|secrets?|credentials?|tokens?|api[_\s]?keys?|private[_\s]?keys?)\b", re.IGNORECASE),
-        re.compile(r"\b(?:send|post|exfiltrate|upload)\s+(?:to|secrets?|tokens?|credentials?|env)\b", re.IGNORECASE),
+        re.compile(r"\b(?:print|dump|output|leak|reveal|echo|exfiltrate|read|steal|harvest)\s+(?:all\s+|the\s+|your\s+)?(?:env|environment(?:\s+vars?)?|secrets?|credentials?|tokens?|api[_\s]?keys?|private[_\s]?keys?|ssh\s+keys?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:send|post|exfiltrate|upload)\s+(?:all\s+|the\s+|your\s+)?(?:secrets?|tokens?|credentials?|env(?:ironment)?(?:\s+vars?)?|ssh\s+keys?|id_rsa|passwords?|private[_\s]?keys?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:credentials?|secrets?|tokens?|private[_\s]?keys?|id_rsa|~\/\.ssh|~\/\.aws\/credentials)\b.{0,55}\b(?:send|post|exfiltrate|upload)\s+to\b", re.IGNORECASE),
+        re.compile(r"\bexfiltrate\b.{0,35}\b(?:to|via|over|data|secrets?|tokens?|credentials?|files?)\b", re.IGNORECASE),
+        re.compile(r"\b(?:curl|wget|nc|fetch)\b.{0,80}(?:~\/\.ssh\/id_rsa|~\/\.aws\/credentials|\.npmrc\b)", re.IGNORECASE),
         re.compile(r"\$\{?(?:GITHUB_TOKEN|GITHUB_APP_PRIVATE_KEY|GCP_SECRET|VERTEX_API_KEY|GOOGLE_API_KEY|AWS_SECRET_ACCESS_KEY)\}?", re.IGNORECASE),
     ],
     InjectionPatternType.ROLEPLAY_JAILBREAK: [
-        re.compile(r"\b(?:you\s+are\s+now\s+in\s+unrestricted\s+mode|dan\s+mode|always\s+say\s+yes|bypass\s+(?:safety|policy)\s+(?:rules?|checks?|filters?))\b", re.IGNORECASE),
+        re.compile(r"\b(?:you\s+are\s+now\s+in\s+unrestricted\s+mode|dan\s+mode|always\s+say\s+yes|bypass\s+(?:safety|policy|security)\s+(?:rules?|checks?|filters?|constraints?))\b", re.IGNORECASE),
         re.compile(r"\b(?:act\s+as|pretend\s+you\s+are)\s+(?:an?\s+unrestricted|a\s+hacked|an\s+unfiltered)\s+(?:assistant|ai|reviewer)\b", re.IGNORECASE),
     ],
     InjectionPatternType.DELIMITER_ESCAPE: [
@@ -170,6 +249,13 @@ _PATTERNS = {
         re.compile(r"(?:<\|im_start\|>|<\|im_end\|>|<\|endoftext\|>|\[/?INST\])", re.IGNORECASE),
     ],
 }
+
+# Additional shell/exfil patterns checked strictly inside decoded obfuscated payloads (Base64 / Hex / URL / Bidi)
+_DECODED_SHELL_EXFIL_PATTERNS = [
+    re.compile(r"(?:~\/\.ssh\/id_rsa|~\/\.aws\/credentials|\/etc\/passwd|\/etc\/shadow|\.npmrc\b)", re.IGNORECASE),
+    re.compile(r"\b(?:curl|wget|nc)\b.{0,80}(?:\|\s*(?:bash|sh)\b|https?:\/\/)", re.IGNORECASE),
+    re.compile(r"\b(?:os\.system|subprocess\.(?:run|Popen|call))\s*\(", re.IGNORECASE),
+]
 
 # Patterns specifically monitored inside LLM model responses (egress guard)
 _MODEL_RESPONSE_EXFIL_PATTERNS = [
@@ -217,6 +303,8 @@ class InjectionDetector:
         fail_closed: Optional[bool] = None,
         scan_model_response_enabled: Optional[bool] = None,
         enable_multilang: Optional[bool] = None,
+        request_delay_seconds: Optional[float] = None,
+        max_retries: int = 5,
     ):
         resolved_template, resolved_location = resolve_model_armor_config(
             project_id=project_id,
@@ -227,20 +315,20 @@ class InjectionDetector:
         if enable_model_armor is None:
             env_flag = os.getenv("ENABLE_MODEL_ARMOR")
             if env_flag is not None:
-                enable_model_armor = env_flag.lower() in ("true", "1", "yes")
+                enable_model_armor = env_flag.strip().lower() in ("true", "1", "yes")
             else:
                 enable_model_armor = DEFAULT_CONFIG.enable_model_armor
 
         self.enable_model_armor = bool(enable_model_armor)
         self.model_armor_template = resolved_template
         self.model_armor_location = resolved_location
-        self.max_chunk_chars = max_chunk_chars or DEFAULT_CONFIG.model_armor_max_chunk_chars
-        self.chunk_overlap = chunk_overlap if chunk_overlap is not None else DEFAULT_CONFIG.model_armor_chunk_overlap
+        self.max_chunk_chars = max(1, int(max_chunk_chars or DEFAULT_CONFIG.model_armor_max_chunk_chars))
+        self.chunk_overlap = max(0, int(chunk_overlap if chunk_overlap is not None else DEFAULT_CONFIG.model_armor_chunk_overlap))
 
         if fail_closed is None:
             env_fc = os.getenv("MODEL_ARMOR_FAIL_CLOSED")
             self.fail_closed = (
-                env_fc.lower() in ("true", "1", "yes")
+                env_fc.strip().lower() in ("true", "1", "yes")
                 if env_fc is not None
                 else DEFAULT_CONFIG.model_armor_fail_closed
             )
@@ -250,7 +338,7 @@ class InjectionDetector:
         if scan_model_response_enabled is None:
             env_smr = os.getenv("MODEL_ARMOR_SCAN_MODEL_RESPONSE")
             self.scan_model_response_enabled = (
-                env_smr.lower() in ("true", "1", "yes")
+                env_smr.strip().lower() in ("true", "1", "yes")
                 if env_smr is not None
                 else DEFAULT_CONFIG.model_armor_scan_model_response
             )
@@ -260,13 +348,25 @@ class InjectionDetector:
         if enable_multilang is None:
             env_ml = os.getenv("MODEL_ARMOR_ENABLE_MULTILANG")
             self.enable_multilang = (
-                env_ml.lower() in ("true", "1", "yes")
+                env_ml.strip().lower() in ("true", "1", "yes")
                 if env_ml is not None
                 else DEFAULT_CONFIG.model_armor_enable_multilang
             )
         else:
             self.enable_multilang = bool(enable_multilang)
 
+        if request_delay_seconds is not None:
+            self.request_delay_seconds = max(0.0, float(request_delay_seconds))
+        else:
+            env_delay = os.getenv("MODEL_ARMOR_REQUEST_DELAY_MS")
+            delay_ms = (
+                int(env_delay.strip())
+                if env_delay is not None and env_delay.strip().isdigit()
+                else DEFAULT_CONFIG.model_armor_request_delay_ms
+            )
+            self.request_delay_seconds = max(0.0, delay_ms / 1000.0)
+
+        self.max_retries = max(1, int(max_retries))
         self._client: Optional[Any] = model_armor_client
 
     @property
@@ -299,8 +399,20 @@ class InjectionDetector:
         # 2. Fold Unicode compatibility characters (fullwidth / mathematical lookalikes)
         folded = unicodedata.normalize("NFKC", unescaped)
         # 3. Strip zero-width spaces, soft hyphens, BOM, and bidirectional override characters
-        cleaned = re.sub(r"[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF\u00AD]", "", folded)
+        cleaned = _INVISIBLE_CHARS_RE.sub("", folded)
         return cleaned
+
+    def _fold_confusables(self, text: str) -> str:
+        """Folds Cyrillic/Greek cross-script homoglyphs to ASCII skeletons (1:1 index-preserving)."""
+        return text.translate(_CONFUSABLE_TRANS) if text else ""
+
+    @staticmethod
+    def _strip_combining_marks(text: str) -> str:
+        """Strips Unicode combining diacritics (category Mn) after NFKD decomposition for obfuscated text detection."""
+        if not text:
+            return ""
+        decomposed = unicodedata.normalize("NFKD", text)
+        return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
 
     def _chunk_text(self, text: str) -> List[str]:
         """Splits large text into overlapping windows so boundary-split injections are scanned."""
@@ -308,7 +420,8 @@ class InjectionDetector:
             return [text]
 
         chunks: List[str] = []
-        step = max(1, self.max_chunk_chars - self.chunk_overlap)
+        overlap = min(self.chunk_overlap, max(0, self.max_chunk_chars - 1))
+        step = max(1, self.max_chunk_chars - overlap)
         start = 0
         while start < len(text):
             chunks.append(text[start : start + self.max_chunk_chars])
@@ -317,27 +430,94 @@ class InjectionDetector:
             start += step
         return chunks
 
-    def _extract_decoded_obfuscations(self, text: str) -> List[Tuple[str, str]]:
-        """Decodes suspicious URL-encoded or Base64-encoded spans for inspection."""
-        decoded_candidates: List[Tuple[str, str]] = []
+    @staticmethod
+    def _is_printable_payload(decoded_str: str, require_whitespace_or_punct: bool = False) -> bool:
+        if not decoded_str:
+            return False
+        printable_ratio = sum(ch.isprintable() or ch.isspace() for ch in decoded_str) / len(decoded_str)
+        if printable_ratio <= 0.9:
+            return False
+        if require_whitespace_or_punct and not any(ch.isspace() or ch in "/:;=&|" for ch in decoded_str):
+            return False
+        return True
 
-        # URL-encoded sequences containing at least 4 percent-encoded bytes
+    def _extract_decoded_obfuscations(self, text: str, raw_text: Optional[str] = None) -> List[Tuple[str, str]]:
+        """Decodes suspicious URL, Base64, Hex, \\uXXXX, and Bidi-reversed spans for inspection."""
+        decoded_candidates: List[Tuple[str, str]] = []
+        seen_decoded: set[str] = set()
+
+        def _add_candidate(decoded: str, label: str) -> None:
+            if decoded and decoded not in seen_decoded:
+                seen_decoded.add(decoded)
+                decoded_candidates.append((decoded, label))
+
+        def _extract_base64_and_hex(src: str, depth: int = 0) -> None:
+            # Base64 & URL-safe Base64 tokens >= 24 total chars that decode cleanly to printable UTF-8
+            for m in _BASE64_CANDIDATE_RE.finditer(src):
+                token = m.group(0)
+                if len(token) < 24:
+                    continue
+                core = token.rstrip("=")
+                padded = core + ("=" * ((4 - len(core) % 4) % 4))
+                try:
+                    if "-" in token or "_" in token:
+                        raw_bytes = base64.urlsafe_b64decode(padded.encode("ascii"))
+                    else:
+                        raw_bytes = base64.b64decode(padded, validate=True)
+                    decoded_str = raw_bytes.decode("utf-8")
+                    if self._is_printable_payload(decoded_str):
+                        _add_candidate(decoded_str, token[:60])
+                        if depth < 1:
+                            _extract_base64_and_hex(decoded_str, depth=depth + 1)
+                except Exception:
+                    continue
+
+            # Hex-encoded payloads (>= 32 contiguous hex chars)
+            for m in _HEX_CANDIDATE_RE.finditer(src):
+                token = m.group(0)
+                if len(token) % 2 != 0:
+                    continue
+                try:
+                    decoded_str = bytes.fromhex(token).decode("utf-8")
+                    if self._is_printable_payload(decoded_str, require_whitespace_or_punct=True):
+                        _add_candidate(decoded_str, f"hex:{token[:40]}")
+                except Exception:
+                    continue
+
+        # 0. Bidi RTL/LTR override reversed payloads (must check before invisible chars are stripped)
+        if raw_text:
+            for m in _BIDI_OVERRIDE_RE.finditer(raw_text):
+                reversed_span = _INVISIBLE_CHARS_RE.sub("", m.group(1))[::-1].strip()
+                if len(reversed_span) >= 8:
+                    _add_candidate(reversed_span, "bidi_reversed")
+
+        # 1. URL-encoded sequences containing at least 4 percent-encoded bytes
         if len(re.findall(r"%[0-9A-Fa-f]{2}", text)) >= 4:
             url_decoded = unquote(text)
             if url_decoded != text:
-                decoded_candidates.append((url_decoded, "url_encoded_payload"))
+                _add_candidate(url_decoded, "url_encoded_payload")
 
-        # Base64-like tokens >= 24 chars that decode cleanly to printable UTF-8
-        for m in _BASE64_CANDIDATE_RE.finditer(text):
-            token = m.group(0)
-            padded = token + ("=" * ((4 - len(token) % 4) % 4))
+        # 2 & 3. Base64 (up to 2 nested layers) and Hex payloads
+        _extract_base64_and_hex(text, depth=0)
+
+        # 4. C/Python backslash-x escape sequences (\x63\x75\x72\x6c...)
+        for m in _HEX_ESCAPE_SEQ_RE.finditer(text):
+            hex_digits = m.group(0).replace("\\x", "")
             try:
-                raw_bytes = base64.b64decode(padded, validate=True)
-                decoded_str = raw_bytes.decode("utf-8")
-                if decoded_str and sum(ch.isprintable() or ch.isspace() for ch in decoded_str) / len(decoded_str) > 0.9:
-                    decoded_candidates.append((decoded_str, token[:60]))
+                decoded_str = bytes.fromhex(hex_digits).decode("utf-8")
+                if self._is_printable_payload(decoded_str):
+                    _add_candidate(decoded_str, f"hex_esc:{hex_digits[:40]}")
             except Exception:
                 continue
+
+        # 5. Unicode escape sequences (\u0063\u0075\u0072\u006c...) + re-scan combined text if present
+        if _UNICODE_ESCAPE_SEQ_RE.search(text):
+            unicode_decoded = _UNICODE_ESCAPE_SEQ_RE.sub(
+                lambda m: "".join(chr(int(h, 16)) for h in re.findall(r"\\u([0-9a-fA-F]{4})", m.group(0))),
+                text,
+            )
+            if unicode_decoded != text:
+                _add_candidate(unicode_decoded, "unicode_escape_payload")
 
         return decoded_candidates
 
@@ -373,7 +553,7 @@ class InjectionDetector:
         overall_match = _match_state_is_found(getattr(sanitization_result, "filter_match_state", None))
 
         filter_results = getattr(sanitization_result, "filter_results", None) or {}
-        items = filter_results.items() if isinstance(filter_results, dict) else []
+        items = filter_results.items() if isinstance(filter_results, Mapping) else []
 
         for _, f_res in items:
             # 1. Prompt Injection & Jailbreak filter
@@ -426,7 +606,7 @@ class InjectionDetector:
                 rai_types = getattr(rai_res, "rai_filter_type_results", None) or {}
                 matched_subtypes = [
                     str(k)
-                    for k, v in (rai_types.items() if isinstance(rai_types, dict) else [])
+                    for k, v in (rai_types.items() if isinstance(rai_types, Mapping) else [])
                     if _match_state_is_found(getattr(v, "match_state", None))
                 ]
                 if matched_subtypes:
@@ -482,7 +662,7 @@ class InjectionDetector:
             )
 
         normalized = self._normalize_text(text)
-        decoded_candidates = self._extract_decoded_obfuscations(normalized)
+        decoded_candidates = self._extract_decoded_obfuscations(normalized, raw_text=text)
         ma_res: Optional[InjectionResult] = None
         ma_status = "disabled"
         ma_error: Optional[str] = None
@@ -524,6 +704,38 @@ class InjectionDetector:
             model_armor_error=ma_error,
         )
 
+    def _invoke_model_armor_with_retry(self, fn: Callable[[], Any]) -> Any:
+        """Executes a Model Armor API call with optional pacing delay and 429/503 exponential backoff."""
+        for attempt in range(self.max_retries):
+            if attempt == 0 and self.request_delay_seconds > 0:
+                time.sleep(self.request_delay_seconds * random.uniform(0.85, 1.25))
+            try:
+                return fn()
+            except Exception as exc:
+                exc_str = str(exc)
+                exc_upper = exc_str.upper()
+                is_transient = (
+                    "429" in exc_str
+                    or "RESOURCE_EXHAUSTED" in exc_upper
+                    or "TOOMANYREQUESTS" in exc_upper
+                    or "RATE LIMIT" in exc_upper
+                    or "503" in exc_str
+                    or "SERVICEUNAVAILABLE" in exc_upper
+                    or "UNAVAILABLE" in exc_upper
+                )
+                if is_transient and attempt < self.max_retries - 1:
+                    backoff = (2 ** attempt) + random.uniform(1.0, 3.0)
+                    logger.warning(
+                        "Model Armor API rate-limited/transient (%s). Retrying in %.2fs (attempt %d/%d)...",
+                        exc_str[:120],
+                        backoff,
+                        attempt + 1,
+                        self.max_retries,
+                    )
+                    time.sleep(backoff)
+                else:
+                    raise
+
     def _scan_local_heuristics(
         self,
         text: str,
@@ -531,41 +743,77 @@ class InjectionDetector:
         ma_error: Optional[str] = None,
         decoded_candidates: Optional[List[Tuple[str, str]]] = None,
     ) -> InjectionResult:
-        """Evaluates normalized text and decoded obfuscations against local heuristic rules."""
-        for pattern_type, regex_list in _PATTERNS.items():
-            for regex in regex_list:
-                match = regex.search(text)
-                if match:
-                    raw_snippet = match.group(0)
-                    sanitized = sanitize_snippet(raw_snippet)
-                    logger.warning(
-                        "Adversarial prompt injection pattern detected: %s (snippet: '%s')",
-                        pattern_type.value,
-                        sanitized,
-                    )
-                    return InjectionResult(
-                        detected=True,
-                        pattern_type=pattern_type,
-                        matched_snippet=raw_snippet,
-                        sanitized_snippet=sanitized,
-                        confidence=0.95,
-                        engine="local_heuristic",
-                        model_armor_status=ma_status,
-                        model_armor_error=ma_error,
-                    )
+        """Evaluates normalized text, confusable skeletons, accent-stripped views, and decoded payloads."""
+        folded_text = self._fold_confusables(text)
+        accent_stripped = self._strip_combining_marks(folded_text)
+        views: List[Tuple[str, bool]] = [(text, True)]
+        if folded_text != text:
+            views.append((folded_text, True))
+        if accent_stripped not in (text, folded_text):
+            views.append((accent_stripped, False))
 
-        # Inspect decoded URL / Base64 payloads for obfuscated attacks
+        for view, index_aligned in views:
+            for pattern_type, regex_list in _PATTERNS.items():
+                for regex in regex_list:
+                    match = regex.search(view)
+                    if match:
+                        raw_snippet = text[match.start() : match.end()] if (index_aligned and view is not text) else match.group(0)
+                        sanitized = sanitize_snippet(raw_snippet)
+                        logger.warning(
+                            "Adversarial prompt injection pattern detected: %s (snippet: '%s')",
+                            pattern_type.value,
+                            sanitized,
+                        )
+                        return InjectionResult(
+                            detected=True,
+                            pattern_type=pattern_type,
+                            matched_snippet=raw_snippet,
+                            sanitized_snippet=sanitized,
+                            confidence=0.95,
+                            engine="local_heuristic",
+                            model_armor_status=ma_status,
+                            model_armor_error=ma_error,
+                        )
+
+        # Inspect decoded URL / Base64 / Hex / Bidi payloads for obfuscated attacks
         candidates = decoded_candidates if decoded_candidates is not None else self._extract_decoded_obfuscations(text)
         for decoded_text, encoded_label in candidates:
             decoded_norm = self._normalize_text(decoded_text)
-            for _, regex_list in _PATTERNS.items():
-                for regex in regex_list:
-                    match = regex.search(decoded_norm)
+            decoded_folded = self._fold_confusables(decoded_norm)
+            decoded_stripped = self._strip_combining_marks(decoded_folded)
+            dec_views = [decoded_norm]
+            for extra_view in (decoded_folded, decoded_stripped):
+                if extra_view not in dec_views:
+                    dec_views.append(extra_view)
+            for dec_view in dec_views:
+                for _, regex_list in _PATTERNS.items():
+                    for regex in regex_list:
+                        match = regex.search(dec_view)
+                        if match:
+                            raw_snippet = f"obfuscated({encoded_label}): {match.group(0)}"
+                            sanitized = sanitize_snippet(raw_snippet)
+                            logger.warning(
+                                "Encoded prompt injection detected (%s): '%s'",
+                                encoded_label,
+                                sanitized,
+                            )
+                            return InjectionResult(
+                                detected=True,
+                                pattern_type=InjectionPatternType.ENCODING_OBFUSCATION,
+                                matched_snippet=raw_snippet,
+                                sanitized_snippet=sanitized,
+                                confidence=0.92,
+                                engine="local_heuristic",
+                                model_armor_status=ma_status,
+                                model_armor_error=ma_error,
+                            )
+                for regex in _DECODED_SHELL_EXFIL_PATTERNS:
+                    match = regex.search(dec_view)
                     if match:
                         raw_snippet = f"obfuscated({encoded_label}): {match.group(0)}"
                         sanitized = sanitize_snippet(raw_snippet)
                         logger.warning(
-                            "Encoded prompt injection detected (%s): '%s'",
+                            "Encoded exfiltration payload detected (%s): '%s'",
                             encoded_label,
                             sanitized,
                         )
@@ -621,7 +869,9 @@ class InjectionDetector:
                 if multilang_meta is not None:
                     req_kwargs["multi_language_detection_metadata"] = multilang_meta
                 request = modelarmor_v1.SanitizeUserPromptRequest(**req_kwargs)
-                response = client.sanitize_user_prompt(request=request)
+                response = self._invoke_model_armor_with_retry(
+                    lambda req=request: client.sanitize_user_prompt(request=req)
+                )
                 parsed = self._parse_sanitization_result(
                     getattr(response, "sanitization_result", None),
                     source_text=payload_chunk,
@@ -679,7 +929,9 @@ class InjectionDetector:
                         if multilang_meta is not None:
                             req_kwargs["multi_language_detection_metadata"] = multilang_meta
                         request = modelarmor_v1.SanitizeModelResponseRequest(**req_kwargs)
-                        response = client.sanitize_model_response(request=request)
+                        response = self._invoke_model_armor_with_retry(
+                            lambda req=request: client.sanitize_model_response(request=req)
+                        )
                         parsed = self._parse_sanitization_result(
                             getattr(response, "sanitization_result", None),
                             source_text=chunk,
@@ -762,12 +1014,14 @@ class InjectionDetector:
 
         sanitized = self._normalize_text(working_text)
 
-        # Defang delimiter breakout attempts inside HTML comments containing injection phrases
+        # Defang delimiter breakout attempts inside HTML comments containing injection phrases (incl. homoglyphs)
         def _clean_html_comment(match: re.Match[str]) -> str:
             inner = match.group(1)
-            for regex_list in _PATTERNS.values():
-                if any(rx.search(inner) for rx in regex_list):
-                    return "[QUARANTINED_ADVERSARIAL_COMMENT]"
+            folded_inner = self._fold_confusables(inner)
+            for candidate in (inner, folded_inner):
+                for regex_list in _PATTERNS.values():
+                    if any(rx.search(candidate) for rx in regex_list):
+                        return "[QUARANTINED_ADVERSARIAL_COMMENT]"
             return match.group(0)
 
         sanitized = _HTML_COMMENT_RE.sub(_clean_html_comment, sanitized)
@@ -776,7 +1030,21 @@ class InjectionDetector:
         for rx in _PATTERNS[InjectionPatternType.DELIMITER_ESCAPE]:
             sanitized = rx.sub("[DEFANGED_DELIMITER]", sanitized)
 
-        # Redact matched adversarial directives in-place without erasing legitimate changelog lines
+        # Redact matched adversarial directives in-place (handling 1:1 Cyrillic/Greek confusable homoglyphs too)
+        def _redact_spans(src: str, regex_obj: re.Pattern[str], replacement: str) -> str:
+            folded = self._fold_confusables(src)
+            matches = list(regex_obj.finditer(folded))
+            if not matches:
+                return src
+            out: List[str] = []
+            last_idx = 0
+            for m in matches:
+                out.append(src[last_idx : m.start()])
+                out.append(replacement)
+                last_idx = m.end()
+            out.append(src[last_idx:])
+            return "".join(out)
+
         for p_type in (
             InjectionPatternType.INSTRUCTION_RESET,
             InjectionPatternType.FORCED_VERDICT_OVERRIDE,
@@ -785,15 +1053,23 @@ class InjectionDetector:
         ):
             for rx in _PATTERNS[p_type]:
                 sanitized = rx.sub("[QUARANTINED_ADVERSARIAL_DIRECTIVE]", sanitized)
+                sanitized = _redact_spans(sanitized, rx, "[QUARANTINED_ADVERSARIAL_DIRECTIVE]")
 
-        # If Model Armor flagged release notes semantically (even without regex match), mark boundary
+        # If Model Armor or decoded/obfuscated heuristic flagged release notes without inline redaction, mark boundary
         if (
             injection_result is not None
             and injection_result.detected
             and "release_notes" in (injection_result.surfaces_flagged or [])
             and "[QUARANTINED_" not in sanitized
         ):
-            flt_str = ", ".join(injection_result.triggered_filters or ["model_armor"])
+            flt_str = ", ".join(
+                injection_result.triggered_filters
+                or (
+                    [injection_result.pattern_type.value]
+                    if injection_result.pattern_type
+                    else [injection_result.engine or "security_shield"]
+                )
+            )
             sanitized = f"[MODEL_ARMOR_QUARANTINED_INPUT filters={flt_str}]\n{sanitized}"
 
         return sanitized

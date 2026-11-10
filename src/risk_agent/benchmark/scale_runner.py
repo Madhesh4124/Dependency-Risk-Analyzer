@@ -65,6 +65,7 @@ class ScaleBenchmarkRunner:
         hybrid_agent: Optional[RiskAgentPipeline] = None,
         exclude_rejected_candidates: bool = False,
         require_gcp: bool = True,
+        request_delay_seconds: Optional[float] = None,
     ):
         self.dataset_root = dataset_root or resolve_benchmark_root()
         self.concurrency = concurrency
@@ -73,8 +74,21 @@ class ScaleBenchmarkRunner:
             single_call_baseline is not None and hybrid_agent is not None
         )
 
+        if request_delay_seconds is not None:
+            self.request_delay_seconds = max(0.0, float(request_delay_seconds))
+        elif self._using_injected_doubles:
+            self.request_delay_seconds = 0.0
+        else:
+            env_delay = os.getenv("LLM_REQUEST_DELAY_MS")
+            if env_delay is not None and env_delay.strip().isdigit():
+                self.request_delay_seconds = max(0.0, int(env_delay.strip()) / 1000.0)
+            else:
+                self.request_delay_seconds = 0.5
+
         # Security shield & deterministic baselines initialization
-        self.injection_detector = injection_detector or InjectionDetector()
+        self.injection_detector = injection_detector or InjectionDetector(
+            request_delay_seconds=self.request_delay_seconds if not self._using_injected_doubles else 0.0
+        )
         self.semver_baseline = SemVerBaseline()
         self.green_ci_baseline = GreenCIBaseline()
         self.pure_ast_baseline = PureASTBaseline()
@@ -82,11 +96,22 @@ class ScaleBenchmarkRunner:
         if require_gcp and not self._using_injected_doubles:
             self._validate_gcp_requirements()
 
-        logger.info("Initializing live Vertex AI Gemini & Model Armor pipelines for Phase 7 benchmark...")
-        self.single_call_baseline = single_call_baseline or SingleCallLLMBaseline()
-        self.hybrid_agent = hybrid_agent or RiskAgentPipeline(
-            injection_detector=self.injection_detector
+        logger.info(
+            "Initializing live Vertex AI Gemini & Model Armor pipelines for Phase 7 benchmark (pacing=%.2fs)...",
+            self.request_delay_seconds,
         )
+        self.single_call_baseline = single_call_baseline or SingleCallLLMBaseline(
+            request_delay_seconds=self.request_delay_seconds
+        )
+        if hybrid_agent is not None:
+            self.hybrid_agent = hybrid_agent
+        else:
+            from risk_agent.extraction.extractor import LLMExtractor
+
+            self.hybrid_agent = RiskAgentPipeline(
+                extractor=LLMExtractor(request_delay_seconds=self.request_delay_seconds),
+                injection_detector=self.injection_detector,
+            )
 
     def _validate_gcp_requirements(self) -> None:
         """Verifies live Google Cloud Model Armor and GCP credentials prior to execution."""
@@ -247,8 +272,8 @@ class ScaleBenchmarkRunner:
         lat_b3 = (time.perf_counter() - t_b3) * 1000
 
         # 4. Baseline 4: Direct Single LLM Call (Live Vertex AI Gemini, no shield/verifier/floor)
-        if not self._using_injected_doubles:
-            time.sleep(random.uniform(0.25, 0.55))
+        if not self._using_injected_doubles and self.request_delay_seconds > 0:
+            time.sleep(self.request_delay_seconds * random.uniform(0.85, 1.3))
         t_b4 = time.perf_counter()
         try:
             resp = self.single_call_baseline.evaluate(
@@ -267,8 +292,8 @@ class ScaleBenchmarkRunner:
         lat_single_call = (time.perf_counter() - t_b4) * 1000
 
         # 5. System 5: Full Hybrid Risk Agent Pipeline (Model Armor Ingress/Egress + Gemini + Verifier + AST + Policy)
-        if not self._using_injected_doubles:
-            time.sleep(random.uniform(0.25, 0.55))
+        if not self._using_injected_doubles and self.request_delay_seconds > 0:
+            time.sleep(self.request_delay_seconds * random.uniform(0.85, 1.3))
         t_hy = time.perf_counter()
         s5_inj_detected = False
         s5_inj_engine: Optional[str] = None

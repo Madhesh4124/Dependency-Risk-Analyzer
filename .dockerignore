@@ -18,5 +18,6 @@ __pycache__
 benchmark/tier_a
 benchmark/tier_b
 benchmark/frozen_v1
+benchmark/external
 docs/
 tests/
