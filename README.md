@@ -6,6 +6,9 @@ An automated, AI-powered security and compatibility analysis agent that detects 
   <a href="https://github.com/apps/dependency-impact-analyzer">
     <img src="https://img.shields.io/badge/GitHub%20App-1--Click%20Install-2ea44f?style=for-the-badge&logo=github" alt="Install GitHub App" />
   </a>
+  <a href="https://www.kaggle.com/datasets/madheshraj/python-dependency-upgrade-risk-benchmark">
+    <img src="https://img.shields.io/badge/Kaggle-PyRiskBench%20Dataset-20BEFF?style=for-the-badge&logo=kaggle" alt="Kaggle Dataset" />
+  </a>
 </p>
 
 ---
@@ -96,8 +99,9 @@ Pure deterministic linters and raw zero-shot LLM prompts each break down on real
 
 ## Baseline & Security Evaluation Reports
 
-Detailed methodology, datasets, baseline comparisons, and empirical metrics live in the standalone evaluation reports:
+Detailed methodology, datasets, baseline comparisons, and empirical metrics live in the standalone evaluation reports and published benchmark datasets:
 
+- **[`PyRiskBench` Kaggle Dataset (Tier A & Tier B)](https://www.kaggle.com/datasets/madheshraj/python-dependency-upgrade-risk-benchmark)** — **Empirical Ground-Truth Benchmark Dataset:** The complete benchmark published on Kaggle, containing 20 deterministic synthetic break/no-break fixtures (**`tier_a/`**) and 140 harvested real-world dependency PRs with 30 offline differential replay cases (**`tier_b/`**).
 - **[`reports/upgrade_risk_benchmark_report.md`](reports/upgrade_risk_benchmark_report.md)** — **5-Way Baseline & Upgrade Risk Evaluation (`PyRiskBench`):** Live Vertex AI comparison across SemVer heuristic, Green CI parity, Pure AST analysis, Direct Single LLM, and the Hybrid Risk Agent across curated fixtures and real dependency PRs.
 - **[`reports/prompt_injection_benchmark_report.md`](reports/prompt_injection_benchmark_report.md)** — **Prompt Injection & Security Shield Evaluation ([`CloneGuard`](https://github.com/prodnull/cloneguard) by [`prodnull`](https://github.com/prodnull), Apache-2.0):** Adversarial prompt-injection recall and benign false-positive benchmarking for local normalization heuristics paired with Google Cloud Model Armor (`N = 539`).
 
