@@ -142,3 +142,50 @@ async def test_check_run_with_injection_warning(check_client, safe_report):
         )
         assert cid == 888125
         assert "SECURITY ALERT" in captured_payload
+
+
+@pytest.mark.anyio
+async def test_create_skipped_check_run_success(check_client):
+    """Verifies that create_skipped_check_run creates a passing check run."""
+    captured_payload = None
+
+    def mock_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_payload
+        assert request.method == "POST"
+        assert "/check-runs" in str(request.url)
+        captured_payload = request.read().decode("utf-8")
+        return httpx.Response(201, json={"id": 999123})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(mock_handler)) as client:
+        cid, status = await check_client.create_skipped_check_run(
+            repo_full_name="owner/repo",
+            head_sha="head123456",
+            token="ghs_test_token",
+            client=client,
+        )
+        assert cid == 999123
+        assert status == "success"
+        assert '"conclusion":"success"' in captured_payload
+        assert '"status":"completed"' in captured_payload
+        assert "Passed: No dependency upgrade detected" in captured_payload
+
+
+@pytest.mark.anyio
+async def test_create_skipped_check_run_missing_token_or_head(check_client):
+    """Verifies that missing token or invalid HEAD skips API call."""
+    cid, status = await check_client.create_skipped_check_run(
+        repo_full_name="owner/repo",
+        head_sha="head123456",
+        token="",
+    )
+    assert cid is None
+    assert status == "skipped"
+
+    cid, status = await check_client.create_skipped_check_run(
+        repo_full_name="owner/repo",
+        head_sha="HEAD",
+        token="valid_token",
+    )
+    assert cid is None
+    assert status == "skipped"
+

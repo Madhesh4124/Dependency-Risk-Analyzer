@@ -234,6 +234,11 @@ async def receive_webhook(
     if "test_sources" in payload:
         custom_sources = payload["test_sources"]
         manifest_content = custom_sources.get("requirements.txt") or custom_sources.get("pyproject.toml", "")
+        if "test_after_sources" in payload:
+            after_sources = payload["test_after_sources"]
+            after_manifest_content = after_sources.get("requirements.txt") or after_sources.get("pyproject.toml", "")
+        else:
+            after_manifest_content = manifest_content
     elif repo_full_name and base_sha != "HEAD":
         # Option D: Fetch repository sources from GitHub API using app or PAT token
         source_fetcher = RepoSourceFetcher(github_token=github_token)
@@ -258,6 +263,7 @@ async def receive_webhook(
                 after_manifest_content = head_sources.get("pyproject.toml") or head_sources.get("requirements.txt", "")
 
     # Parse before and after manifests to find exact bumped dependency
+    detected_bumps = []
     if manifest_content and after_manifest_content and not package_name:
         manifest_name = "pyproject.toml" if "pyproject.toml" in custom_sources else "requirements.txt"
         detected_bumps = ManifestDiffParser.parse_file_pair(
@@ -271,12 +277,34 @@ async def receive_webhook(
             old_version = first_bump.old_version
             new_version = first_bump.new_version
 
-    # Fallback to single manifest parsing if diff parsing wasn't possible
-    if not package_name:
-        pkgs = ManifestDiffParser.parse_pyproject_content(manifest_content) if "pyproject.toml" in custom_sources else ManifestDiffParser.parse_requirements_content(manifest_content)
-        package_name = list(pkgs.keys())[0] if pkgs else "unknown"
-        old_version = old_version or pkgs.get(package_name, "1.0.0")
-        new_version = new_version or "2.0.0"
+    # GUARD: If no dependency bump is present in this PR, skip immediately!
+    if not package_name or package_name == "unknown":
+        effective_head_sha = head_sha or pr_data.get("head", {}).get("sha")
+        logger.info(
+            f"PR #{pr_number} on {repo_full_name} does not modify dependency manifests; skipping analysis.",
+            extra={"delivery_id": delivery_id, "repo": repo_full_name, "pr_number": pr_number},
+        )
+
+        # Publish green check run so branch protection rules don't block merge
+        check_run_id, check_status = None, "skipped"
+        if repo_full_name and effective_head_sha and effective_head_sha != "HEAD" and github_token:
+            check_run_id, check_status = await github_check_client.create_skipped_check_run(
+                repo_full_name=repo_full_name,
+                head_sha=effective_head_sha,
+                token=github_token,
+                reason="No dependency manifests (`requirements.txt`, `pyproject.toml`) were modified in this PR."
+            )
+
+        elapsed_ms = (time.time() - start_time) * 1000.0
+        return {
+            "status": "ignored",
+            "delivery_id": delivery_id,
+            "reason": "No dependency version bumps detected in pull request",
+            "pr_number": pr_number,
+            "check_run_id": check_run_id,
+            "check_run_status": check_status,
+            "execution_latency_ms": round(elapsed_ms, 2),
+        }
 
     old_version = old_version or "1.0.0"
     new_version = new_version or "2.0.0"

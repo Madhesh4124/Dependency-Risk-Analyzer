@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from risk_agent.secrets import clear_secret_cache
-from risk_agent.webhook.app import DemoSimulatedLLM, app, github_comment_client, pipeline
+from risk_agent.webhook.app import DemoSimulatedLLM, app, github_check_client, github_comment_client, pipeline
 from risk_agent.webhook.pr_commenter import REPORT_SIGNATURE
 
 
@@ -155,3 +155,51 @@ def test_pr_comment_failure_gracefully_degrades(monkeypatch, client):
     assert data["status"] == "processed"
     assert data["pr_comment_status"] == "failed"
     assert data["pr_comment_id"] is None
+
+
+def test_non_dependency_pr_is_ignored_and_passes_check(client, monkeypatch):
+    """Verifies that PRs with no manifest changes exit early without LLM calls."""
+    mock_called = False
+
+    async def mock_skipped(repo_full_name, head_sha, reason="", token="", client=None):
+        nonlocal mock_called
+        mock_called = True
+        return 999001, "success"
+
+    monkeypatch.setattr(github_check_client, "create_skipped_check_run", mock_skipped)
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake_test_token")
+
+    delivery_id = str(uuid.uuid4())
+    headers = {
+        "X-GitHub-Event": "pull_request",
+        "X-GitHub-Delivery": delivery_id,
+    }
+    payload = {
+        "action": "opened",
+        "number": 99,
+        "repository": {"full_name": "test-org/test-repo"},
+        "pull_request": {
+            "number": 99,
+            "title": "docs: update README formatting",
+            "body": "Minor markdown fix",
+            "base": {"sha": "base123"},
+            "head": {"sha": "head456"},
+        },
+        "installation": {"id": 12345},
+        # Manifests are identical (no version bump)
+        "test_sources": {
+            "requirements.txt": "fastapi==0.100.0\npydantic==1.10.8\n",
+        },
+    }
+
+    resp = client.post("/webhook", headers=headers, json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ignored"
+    assert "No dependency version bumps" in data["reason"]
+    assert data["check_run_id"] == 999001
+    assert data["check_run_status"] == "success"
+    assert mock_called is True
+    # Check that execution was near-instantaneous (under 200ms)
+    assert data["execution_latency_ms"] < 200.0
+

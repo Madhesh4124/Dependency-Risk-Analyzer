@@ -125,3 +125,71 @@ class GitHubCheckClient:
         finally:
             if owns_client:
                 await client.aclose()
+
+    async def create_skipped_check_run(
+        self,
+        repo_full_name: str,
+        head_sha: str,
+        reason: str = "No dependency manifests (requirements.txt, pyproject.toml) were modified in this PR.",
+        token: str = "",
+        client: Optional[httpx.AsyncClient] = None,
+    ) -> Tuple[Optional[int], str]:
+        """Creates a passing, informational check run when a PR contains no dependency updates.
+
+        Using conclusion='success' ensures that repositories with branch protection rules
+        requiring 'Dependency Upgrade Risk Analysis' are not blocked on regular PRs.
+        """
+        if not token or not head_sha or head_sha == "HEAD":
+            return None, "skipped"
+
+        url = f"{self.api_base_url}/repos/{repo_full_name}/check-runs"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        payload: Dict[str, Any] = {
+            "name": CHECK_NAME,
+            "head_sha": head_sha,
+            "status": "completed",
+            "conclusion": "success",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "output": {
+                "title": "Passed: No dependency upgrade detected",
+                "summary": reason,
+                "text": (
+                    "This pull request does not modify any dependency manifest files "
+                    "(`requirements.txt`, `pyproject.toml`). The Dependency Upgrade Risk Agent "
+                    "bypassed analysis and automatically passed this check."
+                ),
+            },
+        }
+
+        should_close = False
+        if client is None:
+            client = httpx.AsyncClient(timeout=10.0)
+            should_close = True
+
+        try:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code in {200, 201}:
+                data = resp.json()
+                check_run_id = data.get("id")
+                logger.info(
+                    "Published skipped check run %s for %s @ %s",
+                    check_run_id, repo_full_name, head_sha
+                )
+                return check_run_id, "success"
+            else:
+                logger.warning(
+                    "Failed to create skipped check run for %s @ %s: status %s (%s)",
+                    repo_full_name, head_sha, resp.status_code, resp.text
+                )
+                return None, "failed"
+        except Exception as e:
+            logger.error("Exception creating skipped check run for %s @ %s: %s", repo_full_name, head_sha, e)
+            return None, "error"
+        finally:
+            if should_close:
+                await client.aclose()
+
